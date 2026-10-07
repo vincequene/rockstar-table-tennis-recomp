@@ -99,6 +99,5 @@ ReXGlue. **Aucun fichier du jeu n'est inclus.**
 4. Patiente (20 à 60 minutes la première fois).
 5. Lance `dist\Rockstar Table Tennis\Rockstar Table Tennis.exe`.
 
-En jeu : **F1** réglages (langue, résolution, plein écran…), **F7** succès (**X** pour voir les
-secrets), **Alt+Entrée** fenêtre, **Échap** deux fois pour quitter. À la manette : **Vue + LB**
+En jeu : **F1** réglages (langue, résolution, plein écran…), **F7** succès, **Alt+Entrée** fenêtre, **Échap** deux fois pour quitter. À la manette : **Vue + LB**
 réglages, **Vue + RB** succès, **Vue + Menu** maintenus 2 secondes pour quitter.
