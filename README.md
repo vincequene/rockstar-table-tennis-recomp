@@ -11,7 +11,8 @@ built by static recompilation with the [ReXGlue SDK](https://github.com/rexglue/
 
 ## Features
 
-- Full game, playable with an Xbox controller (wired or Bluetooth)
+- Full game, playable with an Xbox controller (wired or Bluetooth) or the keyboard
+  (arrows = D-pad, **Enter** = Start, **Space** = A, **Backspace** = B, **Tab** = Back)
 - In-game settings menu (**F1** or **View + LB**) styled like the game, in the 5 disc languages:
   language, resolution, fullscreen, texture filtering, Discord
 - Any language shipped on the disc: English, French, German, Spanish, Italian
@@ -75,6 +76,7 @@ Press **F1** in game, or edit `tabletennis.toml` next to the executable:
 | `fullscreen` | `true` / `false` |
 | `anisotropic_override` | 0 = original … 5 = 16x |
 | `discord_enabled` | `true` / `false` |
+| `mnk_mode` | keyboard as a controller: `true` / `false` (keys: `keybind_*`) |
 
 **Discord**: works for everyone with nothing to set up. Just keep the Discord app open on your
 PC and your profile shows "Playing Rockstar Table Tennis" with your match status.
@@ -143,5 +145,6 @@ Le statut Discord marche pour tout le monde sans rien configurer : il suffit que
 4. Patiente (20 à 60 minutes la première fois).
 5. Lance `dist\Rockstar Table Tennis\Rockstar Table Tennis.exe`.
 
-En jeu : **F1** réglages (langue, résolution, plein écran…), **F7** succès, **Alt+Entrée** fenêtre, **Échap** deux fois pour quitter. À la manette : **Vue + LB**
+En jeu : **F1** réglages (langue, résolution, plein écran…), **F7** succès, **Alt+Entrée** fenêtre, **Échap** deux fois pour quitter. Au clavier dans le jeu : flèches =
+croix directionnelle, **Entrée** = Start, **Espace** = A, **Retour arrière** = B. À la manette : **Vue + LB**
 réglages, **Vue + RB** succès, **Vue + Menu** maintenus 2 secondes pour quitter.

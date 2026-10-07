@@ -16,3 +16,19 @@ anisotropic_override = 5
 
 # Show the game status on Discord: true / false
 discord_enabled = true
+
+# Keyboard as a controller (works alongside the gamepad):
+# arrows = D-pad, Enter = Start, Space = A, Backspace = B, Tab = Back
+mnk_mode = true
+keybind_dpad_up = "Up"
+keybind_dpad_down = "Down"
+keybind_dpad_left = "Left"
+keybind_dpad_right = "Right"
+keybind_rstick_up = ""
+keybind_rstick_down = ""
+keybind_rstick_left = ""
+keybind_rstick_right = ""
+keybind_start = "Return"
+keybind_a = "Space"
+keybind_b = "Backspace"
+keybind_back = "Tab"
