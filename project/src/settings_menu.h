@@ -43,6 +43,7 @@ struct MenuText {
   const char* no;
   const char* apply_restart;
   const char* restart_game;
+  const char* quit_game;
   const char* restart_note;
   const char* accept;
   const char* back;
@@ -60,31 +61,31 @@ struct MenuText {
 inline const MenuText& TextFor(uint32_t language) {
   static const MenuText en = {
       "Settings", "Language", "Resolution", "Fullscreen", "Textures", "Original", "Discord status",
-      "Yes", "No", "Apply and restart", "Restart the game", "Language and resolution apply after a restart.",
+      "Yes", "No", "Apply and restart", "Restart the game", "Quit the game", "Language and resolution apply after a restart.",
       "Accept", "Back", "Change",
       "F1 settings - F7 achievements - Alt+Enter window - Esc twice quit",
       "Achievements", "unlocked", "Locked", "online", "Show online achievements", "Hide online achievements"};
   static const MenuText fr = {
       "Réglages", "Langue", "Résolution", "Plein écran", "Textures", "D'origine", "Statut Discord",
-      "Oui", "Non", "Appliquer et redémarrer", "Relancer le jeu",
+      "Oui", "Non", "Appliquer et redémarrer", "Relancer le jeu", "Quitter le jeu",
       "La langue et la résolution s'appliquent après un redémarrage.", "Accepter", "Retour",
       "Modifier", "F1 réglages - F7 succès - Alt+Entrée fenêtre - Échap x2 quitter",
       "Succès", "débloqués", "Verrouillé", "en ligne", "Afficher les succès en ligne", "Masquer les succès en ligne"};
   static const MenuText de = {
       "Einstellungen", "Sprache", "Auflösung", "Vollbild", "Texturen", "Original", "Discord-Status",
-      "Ja", "Nein", "Übernehmen und neu starten", "Spiel neu starten",
+      "Ja", "Nein", "Übernehmen und neu starten", "Spiel neu starten", "Spiel beenden",
       "Sprache und Auflösung gelten nach einem Neustart.", "Annehmen", "Zurück", "Ändern",
       "F1 Einstellungen - F7 Erfolge - Alt+Enter Fenster - 2x Esc Beenden",
       "Erfolge", "freigeschaltet", "Gesperrt", "online", "Online-Erfolge zeigen", "Online-Erfolge verbergen"};
   static const MenuText es = {
       "Ajustes", "Idioma", "Resolución", "Pantalla completa", "Texturas", "Original",
-      "Estado de Discord", "Sí", "No", "Aplicar y reiniciar", "Reiniciar el juego",
+      "Estado de Discord", "Sí", "No", "Aplicar y reiniciar", "Reiniciar el juego", "Salir del juego",
       "El idioma y la resolución se aplican tras reiniciar.", "Aceptar", "Atrás", "Cambiar",
       "F1 ajustes - F7 logros - Alt+Intro ventana - Esc x2 salir",
       "Logros", "desbloqueados", "Bloqueado", "en línea", "Mostrar logros en línea", "Ocultar logros en línea"};
   static const MenuText it = {
       "Impostazioni", "Lingua", "Risoluzione", "Schermo intero", "Texture", "Originale",
-      "Stato Discord", "Sì", "No", "Applica e riavvia", "Riavvia il gioco",
+      "Stato Discord", "Sì", "No", "Applica e riavvia", "Riavvia il gioco", "Esci dal gioco",
       "Lingua e risoluzione si applicano dopo un riavvio.", "Accetta", "Indietro", "Cambia",
       "F1 impostazioni - F7 obiettivi - Alt+Invio finestra - Esc x2 esci",
       "Obiettivi", "sbloccati", "Bloccato", "online", "Mostra obiettivi online", "Nascondi obiettivi online"};
@@ -134,6 +135,7 @@ class SettingsMenu : public rex::ui::ImGuiDialog {
     std::function<void(bool)> set_fullscreen;
     std::function<void(bool)> set_discord;
     std::function<void()> restart;
+    std::function<void()> quit;
     std::function<void()> close;
   };
 
@@ -153,7 +155,7 @@ class SettingsMenu : public rex::ui::ImGuiDialog {
   }
 
  protected:
-  enum Row { kLanguage, kResolution, kFullscreen, kTextures, kDiscord, kApply, kRowCount };
+  enum Row { kLanguage, kResolution, kFullscreen, kTextures, kDiscord, kApply, kQuit, kRowCount };
 
   void OnDraw(ImGuiIO& io) override {
     namespace ui = tabletennis::ui;
@@ -211,6 +213,7 @@ class SettingsMenu : public rex::ui::ImGuiDialog {
         case kTextures: label = t.textures; value = textures_ ? "16x" : t.textures_original; break;
         case kDiscord: label = t.discord; value = discord_ ? t.yes : t.no; break;
         case kApply: label = needs_restart ? t.apply_restart : t.restart_game; break;
+        case kQuit: label = t.quit_game; break;
       }
       float ty = a.y + (row_h - 27.0f) * 0.5f;
       ui::TextSkewed(dl, item_font, 27.0f, ImVec2(a.x + 26.0f, ty), col, ui::Upper(label).c_str(),
@@ -229,7 +232,7 @@ class SettingsMenu : public rex::ui::ImGuiDialog {
     }
     dl->AddText(body_font, 17.0f, ImVec2(L.body_min.x + 26.0f, note_y + 28.0f), ui::kTextDim, t.help);
 
-    ui::DrawFooter(dl, L, {{"A", selected_ == kApply ? t.accept : t.change}, {"B", t.back}});
+    ui::DrawFooter(dl, L, {{"A", selected_ >= kApply ? t.accept : t.change}, {"B", t.back}});
     ui::RotateVertices(dl, first_vtx, ui::CurrentTilt());
     ui::EndCanvas();
   }
@@ -272,7 +275,10 @@ class SettingsMenu : public rex::ui::ImGuiDialog {
     if (row == kApply) {
       Save();
       if (cb_.restart) cb_.restart();
-    } else {
+    } else if (row == kQuit) {
+      Save();
+      if (cb_.quit) cb_.quit();
+    } else if (row < kApply) {
       Change(row, +1);
     }
   }

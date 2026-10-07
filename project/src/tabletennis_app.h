@@ -242,6 +242,7 @@ class TabletennisApp : public rex::ReXApp {
       }
     };
     cb.restart = [this] { RestartGame(); };
+    cb.quit = [this] { RequestQuit(); };
     cb.close = [this] {
       // Destroy the dialog outside of its own draw call.
       app_context().CallInUIThreadDeferred([this] {
