@@ -138,9 +138,9 @@ class AchievementsMenu : public rex::ui::ImGuiDialog {
                   desc.empty() ? t.locked_hint : desc.c_str(), nullptr, rb.x - 24.0f - tx);
     }
 
-    // Secrets are revealed with X; the prompt only appears once revealed.
-    if (show_secrets_) {
-      ui::DrawFooter(dl, L, {{"X", t.hide_secrets}, {"B", t.back}});
+    // X shows / hides the secret achievements.
+    if (hidden || show_secrets_) {
+      ui::DrawFooter(dl, L, {{"X", show_secrets_ ? t.hide_secrets : t.show_secrets}, {"B", t.back}});
     } else {
       ui::DrawFooter(dl, L, {{"B", t.back}});
     }

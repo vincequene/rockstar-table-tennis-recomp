@@ -17,7 +17,7 @@ built by static recompilation with the [ReXGlue SDK](https://github.com/rexglue/
 - Any language shipped on the disc: English, French, German, Spanish, Italian
 - Rendering up to 4K (the original game runs at 720p), 16x texture filtering
 - Fullscreen / windowed (**Alt+Enter**)
-- Achievements (29) with an in-game list (**F7** or **View + RB**, secrets revealed with **X**) and pop-ups
+- Achievements (29) with an in-game list (**F7** or **View + RB**) and pop-ups
 - **Discord** Rich Presence driven by the original Xbox Live presence
   ("Offline Exhib 2-1 — Kumi vs Jesper")
 - Working local network mode (System Link)
@@ -71,6 +71,7 @@ Press **F1** in game, or edit `tabletennis.toml` next to the executable:
   - keeps floating-point exceptions masked (crash `0xC000008F`);
   - small positive socket handles like the console (System Link crashed after the intro);
   - `XGetLanguage` honours the configured language;
+  - the game's own achievements screen request opens the PC achievements screen;
   - a presence hook (used for Discord);
   - faulting address in the log.
 - `scripts/build.ps1`: full build from the ISO.

@@ -42,6 +42,7 @@ struct MenuText {
   const char* yes;
   const char* no;
   const char* apply_restart;
+  const char* restart_game;
   const char* restart_note;
   const char* accept;
   const char* back;
@@ -59,31 +60,31 @@ struct MenuText {
 inline const MenuText& TextFor(uint32_t language) {
   static const MenuText en = {
       "Settings", "Language", "Resolution", "Fullscreen", "Textures", "Original", "Discord status",
-      "Yes", "No", "Apply and restart", "Language and resolution apply after a restart.",
+      "Yes", "No", "Apply and restart", "Restart the game", "Language and resolution apply after a restart.",
       "Accept", "Back", "Change",
       "F1 settings - F7 achievements - Alt+Enter window - Esc twice quit",
       "Achievements", "unlocked", "Locked", "secret", "Show secrets", "Hide secrets"};
   static const MenuText fr = {
       "Réglages", "Langue", "Résolution", "Plein écran", "Textures", "D'origine", "Statut Discord",
-      "Oui", "Non", "Appliquer et redémarrer",
+      "Oui", "Non", "Appliquer et redémarrer", "Relancer le jeu",
       "La langue et la résolution s'appliquent après un redémarrage.", "Accepter", "Retour",
       "Modifier", "F1 réglages - F7 succès - Alt+Entrée fenêtre - Échap x2 quitter",
       "Succès", "débloqués", "Verrouillé", "secrets", "Voir les secrets", "Masquer les secrets"};
   static const MenuText de = {
       "Einstellungen", "Sprache", "Auflösung", "Vollbild", "Texturen", "Original", "Discord-Status",
-      "Ja", "Nein", "Übernehmen und neu starten",
+      "Ja", "Nein", "Übernehmen und neu starten", "Spiel neu starten",
       "Sprache und Auflösung gelten nach einem Neustart.", "Annehmen", "Zurück", "Ändern",
       "F1 Einstellungen - F7 Erfolge - Alt+Enter Fenster - 2x Esc Beenden",
       "Erfolge", "freigeschaltet", "Gesperrt", "geheim", "Geheime zeigen", "Geheime verbergen"};
   static const MenuText es = {
       "Ajustes", "Idioma", "Resolución", "Pantalla completa", "Texturas", "Original",
-      "Estado de Discord", "Sí", "No", "Aplicar y reiniciar",
+      "Estado de Discord", "Sí", "No", "Aplicar y reiniciar", "Reiniciar el juego",
       "El idioma y la resolución se aplican tras reiniciar.", "Aceptar", "Atrás", "Cambiar",
       "F1 ajustes - F7 logros - Alt+Intro ventana - Esc x2 salir",
       "Logros", "desbloqueados", "Bloqueado", "secretos", "Ver secretos", "Ocultar secretos"};
   static const MenuText it = {
       "Impostazioni", "Lingua", "Risoluzione", "Schermo intero", "Texture", "Originale",
-      "Stato Discord", "Sì", "No", "Applica e riavvia",
+      "Stato Discord", "Sì", "No", "Applica e riavvia", "Riavvia il gioco",
       "Lingua e risoluzione si applicano dopo un riavvio.", "Accetta", "Indietro", "Cambia",
       "F1 impostazioni - F7 obiettivi - Alt+Invio finestra - Esc x2 esci",
       "Obiettivi", "sbloccati", "Bloccato", "segreti", "Mostra segreti", "Nascondi segreti"};
@@ -159,7 +160,7 @@ class SettingsMenu : public rex::ui::ImGuiDialog {
     // The menu speaks the language being selected.
     const MenuText& t = TextFor(kMenuLanguages[language_]);
     const bool needs_restart = language_ != initial_language_ || resolution_ != initial_resolution_;
-    const int rows = needs_restart ? kRowCount : kRowCount - 1;
+    const int rows = kRowCount;
 
     // --- Input ---
     ui::MenuInput in = input_.Poll();
@@ -209,7 +210,7 @@ class SettingsMenu : public rex::ui::ImGuiDialog {
         case kFullscreen: label = t.fullscreen; value = fullscreen_ ? t.yes : t.no; break;
         case kTextures: label = t.textures; value = textures_ ? "16x" : t.textures_original; break;
         case kDiscord: label = t.discord; value = discord_ ? t.yes : t.no; break;
-        case kApply: label = t.apply_restart; break;
+        case kApply: label = needs_restart ? t.apply_restart : t.restart_game; break;
       }
       float ty = a.y + (row_h - 27.0f) * 0.5f;
       ui::TextSkewed(dl, item_font, 27.0f, ImVec2(a.x + 26.0f, ty), col, ui::Upper(label).c_str(),

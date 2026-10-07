@@ -8,6 +8,7 @@
 #include <rex/input/input_system.h>
 #include <rex/logging.h>
 #include <rex/rex_app.h>
+#include <rex/system/presence.h>
 #include <rex/runtime.h>
 #include <rex/system/kernel_state.h>
 #include <rex/system/user_module.h>
@@ -106,6 +107,13 @@ class TabletennisApp : public rex::ReXApp {
     // Developer aid: open a menu at startup (used for UI screenshots).
     if (REXCVAR_GET(debug_open_menu) == "settings") ToggleSettings();
     if (REXCVAR_GET(debug_open_menu) == "achievements") ToggleAchievements();
+    // The game's own "Achievements" entry opens our achievements screen.
+    rex::system::presence::SetAchievementsUiHandler([this](uint32_t) {
+      app_context().CallInUIThread([this] {
+        if (!achievements_menu_) ToggleAchievements();
+      });
+      return true;
+    });
     // The game ignores the controller while one of our menus is open.
     if (auto* input = static_cast<rex::input::InputSystem*>(runtime()->input_system())) {
       input->SetActiveCallback([this] { return !menu_open_.load(); });
