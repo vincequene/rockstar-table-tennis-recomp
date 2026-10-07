@@ -35,6 +35,8 @@ struct MenuText {
   const char* title;
   const char* language;
   const char* resolution;
+  const char* render_scale;
+  const char* volume;
   const char* fullscreen;
   const char* textures;
   const char* textures_original;
@@ -60,31 +62,31 @@ struct MenuText {
 
 inline const MenuText& TextFor(uint32_t language) {
   static const MenuText en = {
-      "Settings", "Language", "Resolution", "Fullscreen", "Textures", "Original", "Discord status",
+      "Settings", "Language", "Resolution", "Rendering quality", "Volume", "Fullscreen", "Textures", "Original", "Discord status",
       "Yes", "No", "Apply and restart", "Restart the game", "Quit the game", "Language and resolution apply after a restart.",
       "Accept", "Back", "Change",
       "F1 settings - F7 achievements - Alt+Enter window - Esc twice quit",
       "Achievements", "unlocked", "Locked", "online", "Show online achievements", "Hide online achievements"};
   static const MenuText fr = {
-      "Réglages", "Langue", "Résolution", "Plein écran", "Textures", "D'origine", "Statut Discord",
+      "Réglages", "Langue", "Résolution", "Qualité du rendu", "Volume", "Plein écran", "Textures", "D'origine", "Statut Discord",
       "Oui", "Non", "Appliquer et redémarrer", "Relancer le jeu", "Quitter le jeu",
       "La langue et la résolution s'appliquent après un redémarrage.", "Accepter", "Retour",
       "Modifier", "F1 réglages - F7 succès - Alt+Entrée fenêtre - Échap x2 quitter",
       "Succès", "débloqués", "Verrouillé", "en ligne", "Afficher les succès en ligne", "Masquer les succès en ligne"};
   static const MenuText de = {
-      "Einstellungen", "Sprache", "Auflösung", "Vollbild", "Texturen", "Original", "Discord-Status",
+      "Einstellungen", "Sprache", "Auflösung", "Renderqualität", "Lautstärke", "Vollbild", "Texturen", "Original", "Discord-Status",
       "Ja", "Nein", "Übernehmen und neu starten", "Spiel neu starten", "Spiel beenden",
       "Sprache und Auflösung gelten nach einem Neustart.", "Annehmen", "Zurück", "Ändern",
       "F1 Einstellungen - F7 Erfolge - Alt+Enter Fenster - 2x Esc Beenden",
       "Erfolge", "freigeschaltet", "Gesperrt", "online", "Online-Erfolge zeigen", "Online-Erfolge verbergen"};
   static const MenuText es = {
-      "Ajustes", "Idioma", "Resolución", "Pantalla completa", "Texturas", "Original",
+      "Ajustes", "Idioma", "Resolución", "Calidad de renderizado", "Volumen", "Pantalla completa", "Texturas", "Original",
       "Estado de Discord", "Sí", "No", "Aplicar y reiniciar", "Reiniciar el juego", "Salir del juego",
       "El idioma y la resolución se aplican tras reiniciar.", "Aceptar", "Atrás", "Cambiar",
       "F1 ajustes - F7 logros - Alt+Intro ventana - Esc x2 salir",
       "Logros", "desbloqueados", "Bloqueado", "en línea", "Mostrar logros en línea", "Ocultar logros en línea"};
   static const MenuText it = {
-      "Impostazioni", "Lingua", "Risoluzione", "Schermo intero", "Texture", "Originale",
+      "Impostazioni", "Lingua", "Risoluzione", "Qualità di rendering", "Volume", "Schermo intero", "Texture", "Originale",
       "Stato Discord", "Sì", "No", "Applica e riavvia", "Riavvia il gioco", "Esci dal gioco",
       "Lingua e risoluzione si applicano dopo un riavvio.", "Accetta", "Indietro", "Cambia",
       "F1 impostazioni - F7 obiettivi - Alt+Invio finestra - Esc x2 esci",
@@ -134,6 +136,7 @@ class SettingsMenu : public rex::ui::ImGuiDialog {
   struct Callbacks {
     std::function<void(bool)> set_fullscreen;
     std::function<void(bool)> set_discord;
+    std::function<void(int)> set_volume;
     std::function<void()> restart;
     std::function<void()> quit;
     std::function<void()> close;
@@ -146,22 +149,33 @@ class SettingsMenu : public rex::ui::ImGuiDialog {
       if (kMenuLanguages[i] == REXCVAR_GET(user_language)) language_ = int(i);
     }
     // GPU settings live in the GPU plugin DLL: read them by name.
-    resolution_ = std::clamp(FlagInt("resolution_scale", 1), 1, 3) - 1;
+    scale_ = std::clamp(FlagInt("resolution_scale", 1), 1, 3) - 1;
+    std::string mode = rex::cvar::GetFlagByName("resolution");
+    resolution_ = kDefaultVideoMode;
+    for (int i = 0; i < int(std::size(kVideoModes)); ++i) {
+      if (mode == kVideoModes[i].value) resolution_ = i;
+    }
+    volume_ = std::clamp(FlagInt("master_volume", 100), 0, 100);
     textures_ = FlagInt("anisotropic_override", 0) >= 5;
     fullscreen_ = REXCVAR_GET(fullscreen);
     discord_ = REXCVAR_GET(discord_enabled);
     initial_language_ = language_;
     initial_resolution_ = resolution_;
+    initial_scale_ = scale_;
   }
 
  protected:
-  enum Row { kLanguage, kResolution, kFullscreen, kTextures, kDiscord, kApply, kQuit, kRowCount };
+  enum Row {
+    kLanguage, kResolution, kScale, kFullscreen, kTextures, kVolume, kDiscord, kApply, kQuit,
+    kRowCount
+  };
 
   void OnDraw(ImGuiIO& io) override {
     namespace ui = tabletennis::ui;
     // The menu speaks the language being selected.
     const MenuText& t = TextFor(kMenuLanguages[language_]);
-    const bool needs_restart = language_ != initial_language_ || resolution_ != initial_resolution_;
+    const bool needs_restart = language_ != initial_language_ ||
+                               resolution_ != initial_resolution_ || scale_ != initial_scale_;
     const int rows = kRowCount;
 
     // --- Input ---
@@ -183,11 +197,12 @@ class SettingsMenu : public rex::ui::ImGuiDialog {
     ImFont* item_font = f.item ? f.item : ImGui::GetFont();
     ImFont* body_font = f.body ? f.body : ImGui::GetFont();
 
-    const float row_h = 48.0f;
+    const float row_h = 44.0f;
     const float width = 640.0f;
     const float body_h = 24.0f + rows * row_h + 70.0f;
+    const float total_h = 78.0f + body_h + 52.0f;
     ImVec2 origin(std::max(40.0f, io.DisplaySize.x - width - 140.0f),
-                  std::max(30.0f, io.DisplaySize.y * 0.14f));
+                  std::max(16.0f, (io.DisplaySize.y - total_h) * 0.5f));
     ui::CurrentTilt() = {ImVec2(origin.x + width * 0.5f, origin.y + (78.0f + body_h) * 0.5f), 0.0f};  // straight panel
     const int first_vtx = dl->VtxBuffer.Size;
     ui::PanelLayout L = ui::DrawPanel(dl, origin, width, body_h, t.title);
@@ -208,7 +223,9 @@ class SettingsMenu : public rex::ui::ImGuiDialog {
       std::string label, value;
       switch (r) {
         case kLanguage: label = t.language; value = kLanguageNames[language_]; break;
-        case kResolution: label = t.resolution; value = kResolutionNames[resolution_]; break;
+        case kResolution: label = t.resolution; value = kVideoModes[resolution_].label; break;
+        case kScale: label = t.render_scale; value = kScaleNames[scale_]; break;
+        case kVolume: label = t.volume; value = std::to_string(volume_) + " %"; break;
         case kFullscreen: label = t.fullscreen; value = fullscreen_ ? t.yes : t.no; break;
         case kTextures: label = t.textures; value = textures_ ? "16x" : t.textures_original; break;
         case kDiscord: label = t.discord; value = discord_ ? t.yes : t.no; break;
@@ -238,7 +255,17 @@ class SettingsMenu : public rex::ui::ImGuiDialog {
   }
 
  private:
-  static constexpr const char* kResolutionNames[3] = {"720p", "1440p", "4K"};
+  // Video modes offered by the Xbox 360 dashboard (the game reads them as its TV mode).
+  struct VideoMode {
+    const char* value;  // `resolution` setting
+    const char* label;
+  };
+  static constexpr VideoMode kVideoModes[] = {
+      {"640x480", "480p 4:3"},    {"848x480", "480p 16:9"},    {"1024x768", "768p 4:3"},
+      {"1280x720", "720p 16:9"},  {"1920x1080", "1080p 16:9"},
+  };
+  static constexpr int kDefaultVideoMode = 3;
+  static constexpr const char* kScaleNames[3] = {"x1", "x2", "x3"};
 
   static int FlagInt(const char* name, int fallback) {
     std::string v = rex::cvar::GetFlagByName(name);
@@ -254,7 +281,16 @@ class SettingsMenu : public rex::ui::ImGuiDialog {
       case kLanguage:
         language_ = (language_ + dir + int(kMenuLanguages.size())) % int(kMenuLanguages.size());
         break;
-      case kResolution: resolution_ = (resolution_ + dir + 3) % 3; break;
+      case kResolution: {
+        const int n = int(std::size(kVideoModes));
+        resolution_ = (resolution_ + dir + n) % n;
+        break;
+      }
+      case kScale: scale_ = (scale_ + dir + 3) % 3; break;
+      case kVolume:
+        volume_ = std::clamp(volume_ + dir * 10, 0, 100);
+        if (cb_.set_volume) cb_.set_volume(volume_);
+        break;
       case kFullscreen:
         fullscreen_ = !fullscreen_;
         if (cb_.set_fullscreen) cb_.set_fullscreen(fullscreen_);
@@ -285,7 +321,10 @@ class SettingsMenu : public rex::ui::ImGuiDialog {
 
   void Save() {
     WriteTomlKey(config_path_, "user_language", std::to_string(kMenuLanguages[language_]));
-    WriteTomlKey(config_path_, "resolution_scale", std::to_string(resolution_ + 1));
+    WriteTomlKey(config_path_, "resolution_scale", std::to_string(scale_ + 1));
+    WriteTomlKey(config_path_, "resolution",
+                 std::string("\"") + kVideoModes[resolution_].value + "\"");
+    WriteTomlKey(config_path_, "master_volume", std::to_string(volume_));
     WriteTomlKey(config_path_, "fullscreen", fullscreen_ ? "true" : "false");
     WriteTomlKey(config_path_, "anisotropic_override", textures_ ? "5" : "0");
     WriteTomlKey(config_path_, "discord_enabled", discord_ ? "true" : "false");
@@ -296,12 +335,15 @@ class SettingsMenu : public rex::ui::ImGuiDialog {
   ui::InputReader input_;
   int selected_ = 0;
   int language_ = 0;
-  int resolution_ = 1;
+  int resolution_ = kDefaultVideoMode;
+  int scale_ = 1;
+  int volume_ = 100;
   bool textures_ = true;
   bool fullscreen_ = true;
   bool discord_ = true;
   int initial_language_ = 0;
-  int initial_resolution_ = 1;
+  int initial_resolution_ = kDefaultVideoMode;
+  int initial_scale_ = 1;
 };
 
 }  // namespace tabletennis

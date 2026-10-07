@@ -4,9 +4,16 @@ gpu_plugin = "xenos"
 # Game language: 1 = English, 3 = German, 4 = French, 5 = Spanish, 6 = Italian
 user_language = 1
 
-# Internal resolution (the original game renders at 1280x720).
+# Rendering quality: internal resolution multiplier (the original game renders at 1280x720).
 # 1 = 720p (original), 2 = 1440p, 3 = 4K (2160p). Use 1 if you see graphical glitches.
 resolution_scale = 2
+
+# Console video mode (the game reads it as the TV mode):
+# "640x480" (480p 4:3), "848x480" (480p 16:9), "1024x768" (4:3), "1280x720" (720p), "1920x1080" (1080p)
+resolution = "1280x720"
+
+# Master volume in percent (0 to 100)
+master_volume = 100
 
 # Start in fullscreen (true) or windowed (false). Alt+Enter toggles in game.
 fullscreen = true

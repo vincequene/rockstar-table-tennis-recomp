@@ -460,6 +460,20 @@ index 8778066..01ba06e 100644
    return X_ERROR_SUCCESS;
  }
  
+diff --git a/src/kernel/xboxkrnl/xboxkrnl_video.cpp b/src/kernel/xboxkrnl/xboxkrnl_video.cpp
+index 1254710..833c323 100644
+--- a/src/kernel/xboxkrnl/xboxkrnl_video.cpp
++++ b/src/kernel/xboxkrnl/xboxkrnl_video.cpp
+@@ -238,7 +238,8 @@ void VdQueryVideoMode(X_VIDEO_MODE* video_mode) {
+   video_mode->display_width = display_width;
+   video_mode->display_height = display_height;
+   video_mode->is_interlaced = 0;
+-  video_mode->is_widescreen = display_width * 3 >= display_height * 4;
++  // Wider than 4:3 (640x480 and 1024x768 are standard-aspect modes).
++  video_mode->is_widescreen = display_width * 3 > display_height * 4;
+   video_mode->is_hi_def = display_width >= 1280 || display_height >= 720;
+   video_mode->refresh_rate = refresh_rate_hz;
+   video_mode->video_standard = 1;  // NTSC
 diff --git a/src/system/CMakeLists.txt b/src/system/CMakeLists.txt
 index fc46d86..bc94194 100644
 --- a/src/system/CMakeLists.txt

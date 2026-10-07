@@ -336,4 +336,5 @@ REXCVAR_DEFINE_STRING(discord_client_id, "1557520303423496342", "Discord",
 REXCVAR_DEFINE_STRING(export_icon, "", "Tools",
                       "Write the game icon (PNG) to this path and exit");
 REXCVAR_DEFINE_STRING(debug_open_menu, "", "Tools", "Open a menu at startup: settings or achievements");
+REXCVAR_DEFINE_INT32(master_volume, 100, "Audio", "Master volume in percent (0-100)");
 REXCVAR_DEFINE_BOOL(discord_enabled, true, "Discord", "Show the game status on Discord");

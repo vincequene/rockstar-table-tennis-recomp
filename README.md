@@ -14,7 +14,8 @@ built by static recompilation with the [ReXGlue SDK](https://github.com/rexglue/
 - Full game, playable with an Xbox controller (wired or Bluetooth) or the keyboard
   (arrows = D-pad, **Enter** = Start, **Space** = A, **Backspace** = B, **Tab** = Back)
 - In-game settings menu (**F1** or **View + LB**) styled like the game, in the 5 disc languages:
-  language, resolution, fullscreen, texture filtering, Discord
+  language, resolution (Xbox 360 modes incl. 480p/768p 4:3 and 1080p), rendering quality,
+  fullscreen, texture filtering, master volume, Discord
 - Any language shipped on the disc: English, French, German, Spanish, Italian
 - Rendering up to 4K (the original game runs at 720p), 16x texture filtering
 - Fullscreen / windowed (**Alt+Enter**)
@@ -72,7 +73,9 @@ Press **F1** in game, or edit `tabletennis.toml` next to the executable:
 | Setting | Values |
 |---|---|
 | `user_language` | 1 English, 3 German, 4 French, 5 Spanish, 6 Italian |
-| `resolution_scale` | 1 = 720p, 2 = 1440p, 3 = 4K |
+| `resolution` | console video mode: `"640x480"`, `"848x480"`, `"1024x768"`, `"1280x720"`, `"1920x1080"` |
+| `resolution_scale` | rendering quality: 1 = original, 2 = x2, 3 = x3 |
+| `master_volume` | 0 to 100 |
 | `fullscreen` | `true` / `false` |
 | `anisotropic_override` | 0 = original … 5 = 16x |
 | `discord_enabled` | `true` / `false` |
@@ -110,6 +113,7 @@ PC and your profile shows "Playing Rockstar Table Tennis" with your match status
   - the Xbox Live sign-in screen behaves like "opened then cancelled", so the game shows its
     "sign in to Xbox Live" message instead of hanging;
   - a presence hook (used for Discord);
+  - 4:3 video modes are reported as standard (not widescreen) to the game;
   - faulting address in the log.
 - `scripts/build.ps1`: full build from the ISO.
 

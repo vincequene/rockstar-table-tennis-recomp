@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <rex/audio/downmix.h>
 #include <rex/cvar.h>
 #include <rex/input/input_system.h>
 #include <rex/logging.h>
@@ -39,6 +40,7 @@
 REXCVAR_DECLARE(std::string, discord_client_id);
 REXCVAR_DECLARE(uint32_t, user_language);
 REXCVAR_DECLARE(bool, discord_enabled);
+REXCVAR_DECLARE(int32_t, master_volume);
 REXCVAR_DECLARE(std::string, export_icon);
 REXCVAR_DECLARE(std::string, debug_open_menu);
 
@@ -104,6 +106,7 @@ class TabletennisApp : public rex::ReXApp {
     }
     ApplyWindowIcon();
     StartDiscord();
+    rex::audio::SetOutputGain(std::clamp(REXCVAR_GET(master_volume), 0, 100) / 100.0f);
     // Developer aid: open a menu at startup (used for UI screenshots).
     if (REXCVAR_GET(debug_open_menu) == "settings") ToggleSettings();
     if (REXCVAR_GET(debug_open_menu) == "achievements") ToggleAchievements();
@@ -240,6 +243,10 @@ class TabletennisApp : public rex::ReXApp {
       } else {
         discord_.reset();
       }
+    };
+    cb.set_volume = [](int percent) {
+      rex::cvar::SetFlagByName("master_volume", std::to_string(percent));
+      rex::audio::SetOutputGain(percent / 100.0f);
     };
     cb.restart = [this] { RestartGame(); };
     cb.quit = [this] { RequestQuit(); };
