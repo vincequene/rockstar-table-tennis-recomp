@@ -5,6 +5,8 @@
 #pragma once
 
 #include <rex/cvar.h>
+#include <rex/input/input_system.h>
+#include <rex/logging.h>
 #include <rex/rex_app.h>
 #include <rex/runtime.h>
 #include <rex/system/kernel_state.h>
@@ -23,7 +25,9 @@
 #include <vector>
 
 #include "discord_presence.h"
+#include "achievements_menu.h"
 #include "settings_menu.h"
+#include "tt_ui.h"
 
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
@@ -34,6 +38,8 @@
 REXCVAR_DECLARE(std::string, discord_client_id);
 REXCVAR_DECLARE(uint32_t, user_language);
 REXCVAR_DECLARE(bool, discord_enabled);
+REXCVAR_DECLARE(std::string, export_icon);
+REXCVAR_DECLARE(std::string, debug_open_menu);
 
 class TabletennisApp : public rex::ReXApp {
  public:
@@ -86,30 +92,43 @@ class TabletennisApp : public rex::ReXApp {
 #endif
   }
 
+  void OnConfigureFonts(ImFontAtlas* atlas) override { tabletennis::ui::LoadFonts(atlas); }
+
   void OnPostSetup() override {
+    if (!REXCVAR_GET(export_icon).empty()) {
+      ExportIconAndExit(REXCVAR_GET(export_icon));
+    }
     if (window()) {
       window()->SetTitle("Rockstar Table Tennis");
     }
     ApplyWindowIcon();
     StartDiscord();
+    // Developer aid: open a menu at startup (used for UI screenshots).
+    if (REXCVAR_GET(debug_open_menu) == "settings") ToggleSettings();
+    if (REXCVAR_GET(debug_open_menu) == "achievements") ToggleAchievements();
+    // The game ignores the controller while one of our menus is open.
+    if (auto* input = static_cast<rex::input::InputSystem*>(runtime()->input_system())) {
+      input->SetActiveCallback([this] { return !menu_open_.load(); });
+    }
 #if defined(_WIN32)
-    // Quit combo on the controller: hold View (Back) + Menu (Start) for 2 seconds.
+    // Controller shortcuts: View+Menu held 2 s = quit, View+LB = settings,
+    // View+RB = achievements.
     quit_watch_running_ = true;
     quit_watch_thread_ = std::thread([this]() {
       using clock = std::chrono::steady_clock;
       clock::time_point held_since{};
       bool holding = false;
+      WORD prev = 0;
       while (quit_watch_running_) {
-        bool combo = false;
+        WORD buttons = 0;
         for (DWORD i = 0; i < XUSER_MAX_COUNT; ++i) {
           XINPUT_STATE state = {};
-          if (XInputGetState(i, &state) == ERROR_SUCCESS) {
-            const WORD both = XINPUT_GAMEPAD_BACK | XINPUT_GAMEPAD_START;
-            if ((state.Gamepad.wButtons & both) == both) {
-              combo = true;
-            }
-          }
+          if (XInputGetState(i, &state) == ERROR_SUCCESS) buttons |= state.Gamepad.wButtons;
         }
+        const WORD quit = XINPUT_GAMEPAD_BACK | XINPUT_GAMEPAD_START;
+        const WORD settings = XINPUT_GAMEPAD_BACK | XINPUT_GAMEPAD_LEFT_SHOULDER;
+        const WORD trophies = XINPUT_GAMEPAD_BACK | XINPUT_GAMEPAD_RIGHT_SHOULDER;
+        bool combo = (buttons & quit) == quit;
         if (combo && !holding) {
           holding = true;
           held_since = clock::now();
@@ -120,7 +139,14 @@ class TabletennisApp : public rex::ReXApp {
           RequestQuit();
           return;
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        if ((buttons & settings) == settings && (prev & settings) != settings) {
+          app_context().CallInUIThread([this] { ToggleSettings(); });
+        }
+        if ((buttons & trophies) == trophies && (prev & trophies) != trophies) {
+          app_context().CallInUIThread([this] { ToggleAchievements(); });
+        }
+        prev = buttons;
+        std::this_thread::sleep_for(std::chrono::milliseconds(30));
       }
     });
 #endif
@@ -128,13 +154,12 @@ class TabletennisApp : public rex::ReXApp {
 
   void OnCreateDialogs(rex::ui::ImGuiDrawer* drawer) override {
     imgui_drawer_ref_ = drawer;
-    rex::ui::RegisterBind("bind_tt_settings", "F1", "Toggle game settings menu", [this] {
-      if (settings_menu_) {
-        settings_menu_.reset();
-      } else {
-        OpenSettingsMenu();
-      }
-    });
+    // Replace the SDK's achievements overlay with the game-styled one.
+    rex::ui::UnregisterBind("bind_achievements");
+    rex::ui::RegisterBind("bind_tt_settings", "F1", "Toggle game settings menu",
+                          [this] { ToggleSettings(); });
+    rex::ui::RegisterBind("bind_tt_achievements", "F7", "Toggle achievements",
+                          [this] { ToggleAchievements(); });
   }
 
  private:
@@ -146,6 +171,52 @@ class TabletennisApp : public rex::ReXApp {
 #else
     return std::filesystem::current_path();
 #endif
+  }
+
+  // Writes the title's icon (PNG from the game's XDBF data) and exits. Used by
+  // the build script so the exe gets the game's own icon.
+  void ExportIconAndExit(const std::string& path) {
+    int code = 1;
+    if (auto* ks = runtime() ? runtime()->kernel_state() : nullptr) {
+      auto icon = ks->title_xdbf().icon();
+      if (icon) {
+        if (FILE* f = std::fopen(path.c_str(), "wb")) {
+          std::fwrite(icon.buffer, 1, icon.size, f);
+          std::fclose(f);
+          code = 0;
+        }
+      }
+    }
+    std::_Exit(code);
+  }
+
+  void UpdateMenuOpen() { menu_open_ = settings_menu_ || achievements_menu_; }
+
+  void ToggleSettings() {
+    if (settings_menu_) {
+      settings_menu_.reset();
+    } else {
+      achievements_menu_.reset();
+      OpenSettingsMenu();
+    }
+    UpdateMenuOpen();
+  }
+
+  void ToggleAchievements() {
+    if (achievements_menu_) {
+      achievements_menu_.reset();
+    } else if (imgui_drawer_ref_ && runtime() && runtime()->kernel_state()) {
+      settings_menu_.reset();
+      achievements_menu_ = std::make_unique<tabletennis::AchievementsMenu>(
+          imgui_drawer_ref_, immediate_drawer(), runtime(),
+          &runtime()->kernel_state()->achievements(), [this] {
+            app_context().CallInUIThreadDeferred([this] {
+              achievements_menu_.reset();
+              UpdateMenuOpen();
+            });
+          });
+    }
+    UpdateMenuOpen();
   }
 
   void OpenSettingsMenu() {
@@ -165,7 +236,10 @@ class TabletennisApp : public rex::ReXApp {
     cb.restart = [this] { RestartGame(); };
     cb.close = [this] {
       // Destroy the dialog outside of its own draw call.
-      app_context().CallInUIThreadDeferred([this] { settings_menu_.reset(); });
+      app_context().CallInUIThreadDeferred([this] {
+        settings_menu_.reset();
+        UpdateMenuOpen();
+      });
     };
     settings_menu_ = std::make_unique<tabletennis::SettingsMenu>(
         imgui_drawer_ref_, ExeDir() / "tabletennis.toml", std::move(cb));
@@ -191,6 +265,8 @@ class TabletennisApp : public rex::ReXApp {
 
   rex::ui::ImGuiDrawer* imgui_drawer_ref_ = nullptr;
   std::unique_ptr<tabletennis::SettingsMenu> settings_menu_;
+  std::unique_ptr<tabletennis::AchievementsMenu> achievements_menu_;
+  std::atomic<bool> menu_open_{false};
 
   // The SDK window has no icon of its own: give every top-level window of this
   // process the exe's icon (title bar, taskbar, Alt+Tab).

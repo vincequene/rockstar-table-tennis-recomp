@@ -1,86 +1,103 @@
-# Rockstar Table Tennis — version PC (recompilation statique)
+# Rockstar Table Tennis — PC port (static recompilation)
 
-Portage PC non officiel de **Rockstar Table Tennis** (Xbox 360, 2006, title ID `545407DF`),
-obtenu par recompilation statique avec le [ReXGlue SDK](https://github.com/rexglue/rexglue-sdk).
+Unofficial PC port of **Rockstar Table Tennis** (Xbox 360, 2006, title ID `545407DF`),
+built by static recompilation with the [ReXGlue SDK](https://github.com/rexglue/rexglue-sdk).
 
-> **Ce dépôt ne contient aucun fichier du jeu**, ni code recompilé, ni exécutable.
-> Il faut ta propre copie légale du jeu (ISO Xbox 360). Le script de construction
-> recrée tout sur ta machine à partir de ton ISO, qui n'est jamais modifié.
+> **This repository contains no game files**, no recompiled code and no executable.
+> You need your own legally obtained copy of the game (Xbox 360 ISO). The build script
+> recreates everything on your machine from your ISO, which is never modified.
 
-## Fonctionnalités
+*Version française plus bas.*
 
-- Jeu complet jouable, manette Xbox (filaire ou Bluetooth)
-- Menu de réglages en jeu (**F1**) en 5 langues : langue, résolution, plein écran, textures, Discord
-- Langue au choix parmi celles du disque : anglais, français, allemand, espagnol, italien
-- Rendu jusqu'en 4K (le jeu d'origine est en 720p), filtrage des textures 16x
-- Plein écran / fenêtre (**Alt+Entrée**)
-- Succès (29) avec liste en jeu (**F7**) et notifications
-- Statut **Discord** basé sur le statut Xbox Live d'origine (« Exhib hors ligne 2-1 — Kumi - Jesper »)
-- Mode réseau local (System Link) fonctionnel
-- Quitter : **Échap** deux fois, ou maintenir **Vue + Menu** 2 secondes sur la manette
-- Sauvegardes dans `Documents\Rockstar Table Tennis`
+## Features
 
-## Installation
+- Full game, playable with an Xbox controller (wired or Bluetooth)
+- In-game settings menu (**F1** or **View + LB**) styled like the game, in the 5 disc languages:
+  language, resolution, fullscreen, texture filtering, Discord
+- Any language shipped on the disc: English, French, German, Spanish, Italian
+- Rendering up to 4K (the original game runs at 720p), 16x texture filtering
+- Fullscreen / windowed (**Alt+Enter**)
+- Achievements (29) with an in-game list (**F7** or **View + RB**, secrets revealed with **X**) and pop-ups
+- **Discord** Rich Presence driven by the original Xbox Live presence
+  ("Offline Exhib 2-1 — Kumi vs Jesper")
+- Working local network mode (System Link)
+- Quit: **Esc** twice, or hold **View + Menu** for 2 seconds on the controller
+- Saves in `Documents\Rockstar Table Tennis`
+- The game's own icon, extracted from your copy during the build
 
-Prérequis : Windows 10/11 64 bits, environ 25 Go libres, et ton ISO de Rockstar Table Tennis.
+## Install
 
-1. Télécharge ce dépôt (bouton **Code → Download ZIP**) et décompresse-le.
-2. Double-clique sur **`Construire.bat`** et choisis ton ISO.
-3. Si des outils manquent (Git, CMake, Ninja, LLVM, Visual Studio Build Tools),
-   le script propose de les installer avec `winget`.
-4. Patiente (de 20 à 60 minutes la première fois).
-5. Le jeu est dans **`dist\Rockstar Table Tennis\`** : lance `Rockstar Table Tennis.exe`.
+Requirements: 64-bit Windows 10/11, about 25 GB free, and your Rockstar Table Tennis ISO.
 
-## Réglages
+1. Download this repository (**Code → Download ZIP**) and extract it.
+2. Double-click **`Build.bat`** and pick your ISO.
+3. If tools are missing (Git, CMake, Ninja, LLVM, Visual Studio Build Tools),
+   the script offers to install them with `winget`.
+4. Wait (20 to 60 minutes the first time).
+5. The game is in **`dist\Rockstar Table Tennis\`**: run `Rockstar Table Tennis.exe`.
 
-Appuie sur **F1** en jeu, ou modifie `tabletennis.toml` à côté de l'exécutable (Bloc-notes) :
+## Settings
 
-| Réglage | Valeurs |
+Press **F1** in game, or edit `tabletennis.toml` next to the executable:
+
+| Setting | Values |
 |---|---|
-| `user_language` | 1 anglais, 3 allemand, 4 français, 5 espagnol, 6 italien |
+| `user_language` | 1 English, 3 German, 4 French, 5 Spanish, 6 Italian |
 | `resolution_scale` | 1 = 720p, 2 = 1440p, 3 = 4K |
 | `fullscreen` | `true` / `false` |
-| `anisotropic_override` | 0 = d'origine … 5 = 16x |
+| `anisotropic_override` | 0 = original … 5 = 16x |
 | `discord_enabled` | `true` / `false` |
-| `discord_client_id` | identifiant d'application Discord (vide = désactivé) |
+| `discord_client_id` | Discord application ID (empty = disabled) |
 
-## Limites connues
+## Customization
 
-- Le jeu reste à 60 images par seconde : au-delà, sa logique (moteur RAGE) se dérègle.
-- Le Xbox Live d'origine n'existe plus.
+- **Icon**: extracted automatically from your game. To use another one, put a
+  `tabletennis.ico` at the root of this folder before building.
+- **Title font**: menus use Century Gothic (shipped with Windows/Office). The game's titles use a
+  Pricedown-style font; Pricedown is a commercial font, so it is not included. If you own a TrueType
+  copy, put it in `fonts\pricedown.ttf` before building (otherwise Impact is used).
 
-## Icône
+## Known limitations
 
-L'icône du jeu n'est pas fournie (illustration du jeu). Pour en avoir une, place un fichier
-`project\res\tabletennis.ico` avant de lancer la construction.
+- The game stays at 60 FPS: above that, its game logic (RAGE engine) breaks.
+- The original Xbox Live service no longer exists.
 
-## Fonctionnement technique
+## How it works
 
-- `project/` : projet ReXGlue (manifest, corrections de fonctions dans `tabletennis_fixes.toml`,
-  code de l'application : sortie, chemins, icône, Discord).
-- `patches/rexglue-sdk.patch` : correctifs appliqués au SDK (commit `c94f5eb`) :
-  - détection des petites fonctions virtuelles (`mtctr`/`bctr`) oubliées par l'analyse ;
-  - exceptions virgule flottante toujours masquées (plantage `0xC000008F`) ;
-  - numéros de sockets positifs comme sur la console (le System Link plantait après le générique) ;
-  - `XGetLanguage` respecte la langue configurée ;
-  - point d'accroche pour la présence en ligne (utilisé pour Discord) ;
-  - adresse de plantage dans le journal.
-- `scripts/build.ps1` : construction complète depuis l'ISO.
+- `project/`: ReXGlue project (manifest, function fixes in `tabletennis_fixes.toml`,
+  application code: paths, menus, controller shortcuts, Discord, icon).
+- `patches/rexglue-sdk.patch`: fixes applied to the SDK (commit `c94f5eb`):
+  - detects small virtual-call thunks (`mtctr`/`bctr`) missed by the analysis;
+  - keeps floating-point exceptions masked (crash `0xC000008F`);
+  - small positive socket handles like the console (System Link crashed after the intro);
+  - `XGetLanguage` honours the configured language;
+  - a presence hook (used for Discord);
+  - faulting address in the log.
+- `scripts/build.ps1`: full build from the ISO.
 
-## Mentions légales
+## Legal
 
-Projet de fans, non affilié à Rockstar Games, Take-Two Interactive ou Microsoft.
-« Rockstar Table Tennis » est une marque de ses propriétaires respectifs.
-N'utilise ce projet qu'avec un jeu que tu possèdes légalement. Ne partage ni ISO,
-ni fichiers du jeu, ni le dossier `dist` construit (il contient du code dérivé du jeu).
+Fan project, not affiliated with Rockstar Games, Take-Two Interactive or Microsoft.
+"Rockstar Table Tennis" is a trademark of its respective owners. Only use this project with a
+game you legally own. Do not share ISOs, game files, or the built `dist` folder (it contains
+code derived from the game).
 
-Le ReXGlue SDK est distribué sous licence BSD 3 clauses (© Tom Clay, avec des parties
-issues du projet Xenia) ; le correctif fourni ici est soumis à la même licence.
+This project is released under the BSD 3-Clause license (see `LICENSE`). The ReXGlue SDK is
+BSD 3-Clause (© Tom Clay, with parts from the Xenia project); the SDK patch follows that license.
 
 ---
 
-## English
+## Français
 
-Unofficial PC port of Rockstar Table Tennis (Xbox 360) built with the ReXGlue static
-recompilation SDK. **No game files are included**: run `Construire.bat`, pick your own
-legally obtained ISO, and the script builds everything locally into `dist\`.
+Portage PC non officiel de Rockstar Table Tennis (Xbox 360) par recompilation statique avec
+ReXGlue. **Aucun fichier du jeu n'est inclus.**
+
+1. Télécharge ce dépôt (**Code → Download ZIP**) et décompresse-le.
+2. Double-clique sur **`Build.bat`** et choisis ton ISO (ta propre copie légale).
+3. Accepte l'installation des outils manquants si le script le propose.
+4. Patiente (20 à 60 minutes la première fois).
+5. Lance `dist\Rockstar Table Tennis\Rockstar Table Tennis.exe`.
+
+En jeu : **F1** réglages (langue, résolution, plein écran…), **F7** succès (**X** pour voir les
+secrets), **Alt+Entrée** fenêtre, **Échap** deux fois pour quitter. À la manette : **Vue + LB**
+réglages, **Vue + RB** succès, **Vue + Menu** maintenus 2 secondes pour quitter.

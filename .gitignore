@@ -10,3 +10,5 @@ project/out/
 project/res/*.ico
 project/res/*.png
 *.log
+fonts/
+/tabletennis.ico

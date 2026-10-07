@@ -90,16 +90,16 @@ function Repair-Symlinks([string]$RepoDir) {
 if (-not $Iso) {
   Add-Type -AssemblyName System.Windows.Forms
   $dlg = New-Object System.Windows.Forms.OpenFileDialog
-  $dlg.Title = 'Choisis ton ISO de Rockstar Table Tennis (Xbox 360)'
-  $dlg.Filter = 'Image disque Xbox 360 (*.iso)|*.iso'
-  if ($dlg.ShowDialog() -ne 'OK') { throw 'Aucun ISO choisi.' }
+  $dlg.Title = 'Select your Rockstar Table Tennis ISO (Xbox 360)'
+  $dlg.Filter = 'Xbox 360 disc image (*.iso)|*.iso'
+  if ($dlg.ShowDialog() -ne 'OK') { throw 'No ISO selected.' }
   $Iso = $dlg.FileName
 }
-if (-not (Test-Path -LiteralPath $Iso)) { throw "ISO introuvable : $Iso" }
+if (-not (Test-Path -LiteralPath $Iso)) { throw "ISO not found: $Iso" }
 New-Item -ItemType Directory -Force $Work, $ToolsDir | Out-Null
 
 # --- 1. Tools -----------------------------------------------------------------
-Step 'Verification des outils'
+Step 'Checking build tools'
 Refresh-Path
 $missing = @()
 foreach ($t in @(
@@ -111,9 +111,9 @@ foreach ($t in @(
 }
 $needVs = -not (Find-VsInstall)
 if ($missing.Count -or $needVs) {
-  Write-Host 'Outils manquants :' ($missing.id -join ', ') $(if ($needVs) { 'Visual Studio Build Tools (C++)' })
-  $answer = Read-Host 'Les installer maintenant avec winget ? (o/n)'
-  if ($answer -notmatch '^[oOyY]') { throw 'Installe les outils manquants puis relance le script.' }
+  Write-Host 'Missing tools:' ($missing.id -join ', ') $(if ($needVs) { 'Visual Studio Build Tools (C++)' })
+  $answer = Read-Host 'Install them now with winget? (y/n)'
+  if ($answer -notmatch '^[oOyY]') { throw 'Install the missing tools, then run the script again.' }
   foreach ($t in $missing) {
     winget install --id $t.id -e --accept-package-agreements --accept-source-agreements
   }
@@ -126,7 +126,7 @@ if ($missing.Count -or $needVs) {
 
 # --- 2. ReXGlue SDK -----------------------------------------------------------
 if (-not (Test-Path (Join-Path $SdkInstall 'bin\rexglue.exe'))) {
-  Step 'Telechargement du ReXGlue SDK'
+  Step 'Downloading the ReXGlue SDK'
   if (-not (Test-Path $SdkDir)) {
     git clone $SdkRepo $SdkDir
   }
@@ -134,13 +134,13 @@ if (-not (Test-Path (Join-Path $SdkInstall 'bin\rexglue.exe'))) {
   try {
     git checkout -q $SdkCommit
     git submodule update --init --recursive
-    Step 'Application des correctifs du projet sur le SDK'
+    Step 'Applying this project''s patch to the SDK'
     $patch = Join-Path $Root 'patches\rexglue-sdk.patch'
     $ErrorActionPreference = 'Continue'
     git apply --reverse --check --ignore-whitespace $patch 2>$null
     if ($LASTEXITCODE -ne 0) {
       git apply --ignore-whitespace --whitespace=nowarn $patch
-      if ($LASTEXITCODE -ne 0) { throw 'Le correctif du SDK ne s''applique pas.' }
+      if ($LASTEXITCODE -ne 0) { throw 'The SDK patch does not apply.' }
     }
     $ErrorActionPreference = 'Stop'
   } finally { Pop-Location }
@@ -148,18 +148,18 @@ if (-not (Test-Path (Join-Path $SdkInstall 'bin\rexglue.exe'))) {
   $subs = git -C $SdkDir submodule foreach --recursive --quiet 'echo $displaypath'
   foreach ($s in $subs) { Repair-Symlinks (Join-Path $SdkDir $s) }
 
-  Step 'Compilation du SDK (10 a 30 minutes)'
+  Step 'Building the SDK (10 to 30 minutes)'
   Invoke-InVsEnv "cd /d `"$SdkDir`" && cmake --preset win-amd64 && cmake --build out/build/win-amd64 --config Release --target install"
 }
 $rexglue = Join-Path $SdkInstall 'bin\rexglue.exe'
 
 # --- 3. Game files ------------------------------------------------------------
-Step 'Preparation du projet'
+Step 'Preparing the project'
 New-Item -ItemType Directory -Force $ProjDir | Out-Null
 Copy-Item -Path (Join-Path $Root 'project\*') -Destination $ProjDir -Recurse -Force
 $assets = Join-Path $ProjDir 'assets'
 if (-not (Test-Path (Join-Path $assets 'default.xex'))) {
-  Step "Extraction de l'ISO (lecture seule)"
+  Step 'Extracting the ISO (read-only)'
   $xiso = Join-Path $ToolsDir 'artifacts\extract-xiso.exe'
   if (-not (Test-Path $xiso)) {
     $zip = Join-Path $ToolsDir 'extract-xiso.zip'
@@ -167,22 +167,72 @@ if (-not (Test-Path (Join-Path $assets 'default.xex'))) {
     Expand-Archive -Force $zip $ToolsDir
   }
   & $xiso -x -d $assets $Iso
-  if (-not (Test-Path (Join-Path $assets 'default.xex'))) { throw "default.xex introuvable apres extraction : est-ce le bon ISO ?" }
+  if (-not (Test-Path (Join-Path $assets 'default.xex'))) { throw "default.xex not found after extraction: is this the right ISO?" }
 }
 
 # --- 4. Recompile ---------------------------------------------------------------
-Step 'Traduction du code Xbox 360 en C++'
+Step 'Translating the Xbox 360 code to C++'
 Push-Location $ProjDir
 try {
   & $rexglue codegen tabletennis_manifest.toml
-  if ($LASTEXITCODE -ne 0) { throw 'La traduction du code a echoue (rexglue codegen).' }
+  if ($LASTEXITCODE -ne 0) { throw 'Code translation failed (rexglue codegen).' }
 } finally { Pop-Location }
 
-Step 'Compilation du jeu'
-Invoke-InVsEnv "cd /d `"$ProjDir`" && cmake --preset win-amd64-release && cmake --build --preset win-amd64-release"
+Step 'Building the game'
+$buildCmd = "cd /d `"$ProjDir`" && cmake --preset win-amd64-release && cmake --build --preset win-amd64-release"
+Invoke-InVsEnv $buildCmd
+
+# --- 4b. Game icon --------------------------------------------------------------
+# The icon is not in the repository: take it from your own copy of the game.
+$out = Join-Path $ProjDir 'out\build\win-amd64-release'
+$ico = Join-Path $ProjDir 'res\tabletennis.ico'
+$customIco = Join-Path $Root 'tabletennis.ico'
+if (Test-Path $customIco) { Copy-Item $customIco $ico -Force }
+if (-not (Test-Path $ico)) {
+  Step 'Extracting the game icon'
+  $png = Join-Path $Work 'title_icon.png'
+  Copy-Item (Join-Path $SdkInstall 'bin\*.dll') $out -Force
+  $proc = Start-Process -FilePath (Join-Path $out 'Rockstar Table Tennis.exe') -WorkingDirectory $out `
+    -ArgumentList "--export_icon=`"$png`"", '--fullscreen=false', '--discord_enabled=false' -PassThru
+  if (-not $proc.WaitForExit(60000)) { $proc.Kill() }
+  if (Test-Path $png) {
+    Add-Type -AssemblyName System.Drawing
+    $src = [System.Drawing.Image]::FromFile($png)
+    $sizes = 256, 64, 48, 32, 16
+    $images = @()
+    foreach ($size in $sizes) {
+      $bmp = New-Object System.Drawing.Bitmap $size, $size
+      $g = [System.Drawing.Graphics]::FromImage($bmp)
+      $g.InterpolationMode = 'HighQualityBicubic'
+      $g.DrawImage($src, 0, 0, $size, $size)
+      $g.Dispose()
+      $ms = New-Object System.IO.MemoryStream
+      $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
+      $images += , ($ms.ToArray())
+      $bmp.Dispose()
+    }
+    $src.Dispose()
+    $stream = New-Object System.IO.MemoryStream
+    $w = New-Object System.IO.BinaryWriter $stream
+    $w.Write([uint16]0); $w.Write([uint16]1); $w.Write([uint16]$sizes.Count)
+    $offset = 6 + 16 * $sizes.Count
+    for ($i = 0; $i -lt $sizes.Count; $i++) {
+      $b = if ($sizes[$i] -ge 256) { 0 } else { $sizes[$i] }
+      $w.Write([byte]$b); $w.Write([byte]$b); $w.Write([byte]0); $w.Write([byte]0)
+      $w.Write([uint16]1); $w.Write([uint16]32)
+      $w.Write([uint32]$images[$i].Length); $w.Write([uint32]$offset)
+      $offset += $images[$i].Length
+    }
+    foreach ($img in $images) { $w.Write($img) }
+    [System.IO.File]::WriteAllBytes($ico, $stream.ToArray())
+    Invoke-InVsEnv $buildCmd
+  } else {
+    Write-Host 'Could not extract the icon; the game will build without one.' -ForegroundColor Yellow
+  }
+}
 
 # --- 5. Package -----------------------------------------------------------------
-Step 'Creation du dossier du jeu'
+Step 'Creating the game folder'
 $out = Join-Path $ProjDir 'out\build\win-amd64-release'
 New-Item -ItemType Directory -Force $Dist | Out-Null
 Copy-Item (Join-Path $out 'Rockstar Table Tennis.exe') $Dist -Force
@@ -191,9 +241,11 @@ Copy-Item (Join-Path $SdkInstall 'bin\*.dll') $Dist -Force
 if (-not (Test-Path (Join-Path $Dist 'tabletennis.toml'))) {
   Copy-Item (Join-Path $Root 'config\tabletennis.toml') $Dist
 }
+$fonts = Join-Path $Root 'fonts'
+if (Test-Path $fonts) { Copy-Item $fonts $Dist -Recurse -Force }
 $game = Join-Path $Dist 'game'
 if (-not (Test-Path (Join-Path $game 'default.xex'))) {
   robocopy $assets $game /E /MOVE /NFL /NDL /NJH /NJS | Out-Null
 }
 
-Write-Host "`nTermine ! Lance : $Dist\Rockstar Table Tennis.exe" -ForegroundColor Green
+Write-Host "`nDone! Run: $Dist\Rockstar Table Tennis.exe" -ForegroundColor Green

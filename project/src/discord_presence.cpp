@@ -332,4 +332,7 @@ void DiscordPresence::Stop() {
 
 REXCVAR_DEFINE_STRING(discord_client_id, "", "Discord",
                       "Discord application ID for Rich Presence (empty = disabled)");
+REXCVAR_DEFINE_STRING(export_icon, "", "Tools",
+                      "Write the game icon (PNG) to this path and exit");
+REXCVAR_DEFINE_STRING(debug_open_menu, "", "Tools", "Open a menu at startup: settings or achievements");
 REXCVAR_DEFINE_BOOL(discord_enabled, true, "Discord", "Show the game status on Discord");

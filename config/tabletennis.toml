@@ -1,22 +1,21 @@
-# Reglages de Rockstar Table Tennis (version PC recompilee)
+# Rockstar Table Tennis (PC recompilation) settings. Also editable in game with F1.
 gpu_plugin = "xenos"
 
-# Langue du jeu : 1 = anglais, 3 = allemand, 4 = francais, 5 = espagnol, 6 = italien
-user_language = 4
+# Game language: 1 = English, 3 = German, 4 = French, 5 = Spanish, 6 = Italian
+user_language = 1
 
-# Resolution interne : le jeu d'origine tourne en 1280x720.
-# 1 = 720p d'origine, 2 = 1440p, 3 = 4K (2160p). Mettre 1 si des bugs graphiques apparaissent.
+# Internal resolution (the original game renders at 1280x720).
+# 1 = 720p (original), 2 = 1440p, 3 = 4K (2160p). Use 1 if you see graphical glitches.
 resolution_scale = 2
 
-# Plein ecran au demarrage : true = plein ecran, false = fenetre. Alt+Entree bascule en jeu.
+# Start in fullscreen (true) or windowed (false). Alt+Enter toggles in game.
 fullscreen = true
 
-# Filtrage des textures (plus net de loin) : 0 = jeu d'origine, 5 = 16x
+# Texture filtering: 0 = original, 5 = 16x
 anisotropic_override = 5
 
-# Discord : identifiant de l'application (Application ID). Vide = desactive.
+# Discord Rich Presence application ID (empty = disabled).
 discord_client_id = "1557520303423496342"
 
-# Afficher le statut sur Discord : true / false
+# Show the game status on Discord: true / false
 discord_enabled = true
-
