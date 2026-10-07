@@ -75,11 +75,9 @@ Press **F1** in game, or edit `tabletennis.toml` next to the executable:
 | `fullscreen` | `true` / `false` |
 | `anisotropic_override` | 0 = original … 5 = 16x |
 | `discord_enabled` | `true` / `false` |
-| `discord_client_id` | Discord application ID (empty = disabled) |
 
-**Discord**: the provided application ID works for everyone, nothing to set up. Just keep the
-Discord app open on your PC and your profile shows "Playing Rockstar Table Tennis" with your
-match status. You can also put the ID of your own Discord application instead.
+**Discord**: works for everyone with nothing to set up. Just keep the Discord app open on your
+PC and your profile shows "Playing Rockstar Table Tennis" with your match status.
 
 ## Customization
 

@@ -330,8 +330,9 @@ void DiscordPresence::Stop() {
 
 }  // namespace tabletennis
 
-REXCVAR_DEFINE_STRING(discord_client_id, "", "Discord",
-                      "Discord application ID for Rich Presence (empty = disabled)");
+// Shared "Rockstar Table Tennis" Discord application; can be overridden.
+REXCVAR_DEFINE_STRING(discord_client_id, "1557520303423496342", "Discord",
+                      "Discord application ID for Rich Presence");
 REXCVAR_DEFINE_STRING(export_icon, "", "Tools",
                       "Write the game icon (PNG) to this path and exit");
 REXCVAR_DEFINE_STRING(debug_open_menu, "", "Tools", "Open a menu at startup: settings or achievements");
