@@ -10,6 +10,7 @@
 #include <imgui.h>
 
 #include <algorithm>
+#include <cmath>
 #include <array>
 #include <cstdint>
 #include <filesystem>
@@ -213,7 +214,7 @@ class SettingsMenu : public rex::ui::ImGuiDialog {
       // Mouse: hover selects, click activates.
       if (ui::Hover(a, b)) {
         if (io.MouseDelta.x != 0.0f || io.MouseDelta.y != 0.0f) selected_ = r;
-        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) Activate(r);
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && r != kVolume) Activate(r);
         if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) Change(r, -1);
       }
       const bool sel = r == selected_;
@@ -225,7 +226,7 @@ class SettingsMenu : public rex::ui::ImGuiDialog {
         case kLanguage: label = t.language; value = kLanguageNames[language_]; break;
         case kResolution: label = t.resolution; value = kVideoModes[resolution_].label; break;
         case kScale: label = t.render_scale; value = kScaleNames[scale_]; break;
-        case kVolume: label = t.volume; value = std::to_string(volume_) + " %"; break;
+        case kVolume: label = t.volume; break;  // drawn as a slider below
         case kFullscreen: label = t.fullscreen; value = fullscreen_ ? t.yes : t.no; break;
         case kTextures: label = t.textures; value = textures_ ? "16x" : t.textures_original; break;
         case kDiscord: label = t.discord; value = discord_ ? t.yes : t.no; break;
@@ -235,6 +236,9 @@ class SettingsMenu : public rex::ui::ImGuiDialog {
       float ty = a.y + (row_h - 27.0f) * 0.5f;
       ui::TextSkewed(dl, item_font, 27.0f, ImVec2(a.x + 26.0f, ty), col, ui::Upper(label).c_str(),
                      0.0f);
+      if (r == kVolume) {
+        DrawVolumeSlider(dl, item_font, a, b, ty, col, sel);
+      }
       if (!value.empty()) {
         std::string v = sel ? "<  " + ui::Upper(value) + "  >" : ui::Upper(value);
         ImVec2 ts = item_font->CalcTextSizeA(27.0f, FLT_MAX, 0.0f, v.c_str());
@@ -255,6 +259,44 @@ class SettingsMenu : public rex::ui::ImGuiDialog {
   }
 
  private:
+  // Volume slider: grey track, yellow fill, knob, percentage on the right.
+  // Mouse: click or drag on the track.
+  void DrawVolumeSlider(ImDrawList* dl, ImFont* font, ImVec2 row_a, ImVec2 row_b, float text_y,
+                        ImU32 text_col, bool selected) {
+    namespace ui = tabletennis::ui;
+    const float pct_w = 78.0f;
+    const float x1 = row_b.x - 26.0f - pct_w;
+    const float x0 = x1 - 230.0f;
+    const float cy = (row_a.y + row_b.y) * 0.5f;
+    const float h = 8.0f;
+
+    // Mouse interaction.
+    ImVec2 hit_a(x0 - 8.0f, row_a.y), hit_b(x1 + 8.0f, row_b.y);
+    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && ui::Hover(hit_a, hit_b)) dragging_ = true;
+    if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) dragging_ = false;
+    if (dragging_) {
+      float t = std::clamp((ui::Mouse().x - x0) / (x1 - x0), 0.0f, 1.0f);
+      int v = int(std::lround(t * 100.0f));
+      if (v != volume_) {
+        volume_ = v;
+        if (cb_.set_volume) cb_.set_volume(volume_);
+      }
+    }
+
+    const float fill = x0 + (x1 - x0) * (volume_ / 100.0f);
+    dl->AddRectFilled(ImVec2(x0, cy - h * 0.5f), ImVec2(x1, cy + h * 0.5f),
+                      IM_COL32(70, 70, 70, 255), h * 0.5f);
+    dl->AddRectFilled(ImVec2(x0, cy - h * 0.5f), ImVec2(fill, cy + h * 0.5f), ui::kYellow, h * 0.5f);
+    const float knob = selected || dragging_ ? 11.0f : 9.0f;
+    dl->AddCircleFilled(ImVec2(fill, cy), knob + 2.0f, ui::kBlack, 20);
+    dl->AddCircleFilled(ImVec2(fill, cy), knob, selected ? ui::kYellow : ui::kText, 20);
+
+    std::string pct = std::to_string(volume_) + " %";
+    ImVec2 ts = font->CalcTextSizeA(27.0f, FLT_MAX, 0.0f, pct.c_str());
+    ui::TextSkewed(dl, font, 27.0f, ImVec2(row_b.x - 26.0f - ts.x, text_y), text_col, pct.c_str(),
+                   0.0f);
+  }
+
   // Video modes offered by the Xbox 360 dashboard (the game reads them as its TV mode).
   struct VideoMode {
     const char* value;  // `resolution` setting
@@ -288,7 +330,7 @@ class SettingsMenu : public rex::ui::ImGuiDialog {
       }
       case kScale: scale_ = (scale_ + dir + 3) % 3; break;
       case kVolume:
-        volume_ = std::clamp(volume_ + dir * 10, 0, 100);
+        volume_ = std::clamp((volume_ / 5 + dir) * 5, 0, 100);
         if (cb_.set_volume) cb_.set_volume(volume_);
         break;
       case kFullscreen:
@@ -338,6 +380,7 @@ class SettingsMenu : public rex::ui::ImGuiDialog {
   int resolution_ = kDefaultVideoMode;
   int scale_ = 1;
   int volume_ = 100;
+  bool dragging_ = false;
   bool textures_ = true;
   bool fullscreen_ = true;
   bool discord_ = true;
