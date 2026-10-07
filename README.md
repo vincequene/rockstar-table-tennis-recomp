@@ -29,19 +29,28 @@ built by static recompilation with the [ReXGlue SDK](https://github.com/rexglue/
 ## Install with Claude (easiest)
 
 If you use [Claude Code](https://claude.com/claude-code) (desktop app or terminal), it can do
-everything for you, including installing the tools and fixing problems along the way.
+everything for you: download this repository, install the build tools, build the game and fix
+problems along the way.
 
-1. Download this repository (**Code → Download ZIP**) and extract it, e.g. to `C:\TableTennis`.
-2. Open that folder in Claude Code.
-3. Paste this prompt (replace the ISO path with yours):
+1. Open Claude Code in an empty folder where you want the game (for example `C:\Games`).
+2. Paste this prompt, after replacing the line `ISO:` with the full path of **your** ISO
+   (it can be anywhere on your PC; tip: in File Explorer, Shift + right-click the ISO →
+   "Copy as path"):
 
 ```text
-I want to build the PC version of Rockstar Table Tennis from this repository.
-My legal Xbox 360 ISO is at: C:\Games\Rockstar Table Tennis.iso — never modify it.
-Read README.md, then run Build.bat (scripts/build.ps1) with my ISO. Install any missing
-build tools (ask me before each download), fix any build error, and tell me in simple
-words what is happening at each step. When it is done, launch
-dist\Rockstar Table Tennis\Rockstar Table Tennis.exe and tell me what to test.
+I want to build the PC version of Rockstar Table Tennis (Xbox 360 recompilation).
+Repository: https://github.com/vincequene/rockstar-table-tennis-recomp
+ISO: D:\My Games\Rockstar Table Tennis.iso
+
+My ISO is my own legal copy: never modify, move or delete it.
+1. Download the repository into the current folder (git clone, or the ZIP if Git is missing).
+2. Read its README.md, then run Build.bat with my ISO path
+   (powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Iso "<my ISO path>").
+3. Install any missing build tools, but ask me before each download.
+4. If a step fails, find the cause and fix it.
+5. Explain each step to me in one simple sentence (I am not a programmer).
+6. When it is done, launch dist\Rockstar Table Tennis\Rockstar Table Tennis.exe
+   and tell me what to test.
 ```
 
 ## Install manually
@@ -67,6 +76,10 @@ Press **F1** in game, or edit `tabletennis.toml` next to the executable:
 | `anisotropic_override` | 0 = original … 5 = 16x |
 | `discord_enabled` | `true` / `false` |
 | `discord_client_id` | Discord application ID (empty = disabled) |
+
+**Discord**: the provided application ID works for everyone, nothing to set up. Just keep the
+Discord app open on your PC and your profile shows "Playing Rockstar Table Tennis" with your
+match status. You can also put the ID of your own Discord application instead.
 
 ## Customization
 
@@ -117,8 +130,12 @@ BSD 3-Clause (© Tom Clay, with parts from the Xenia project); the SDK patch fol
 Portage PC non officiel de Rockstar Table Tennis (Xbox 360) par recompilation statique avec
 ReXGlue. **Aucun fichier du jeu n'est inclus.**
 
-**Le plus simple avec Claude Code :** ouvre le dossier du dépôt dans Claude Code et colle le
-prompt de la section « Install with Claude » (en remplaçant le chemin de ton ISO).
+**Le plus simple avec Claude Code :** ouvre Claude Code dans le dossier où tu veux le jeu et colle
+le prompt de la section « Install with Claude ». Remplace la ligne `ISO:` par le chemin de ton ISO,
+qui peut être n'importe où sur ton PC (dans l'Explorateur : Maj + clic droit sur l'ISO →
+« Copier en tant que chemin d'accès »). Claude télécharge lui-même le dépôt.
+
+Le statut Discord marche pour tout le monde sans rien configurer : il suffit que Discord soit ouvert.
 
 **À la main :**
 
