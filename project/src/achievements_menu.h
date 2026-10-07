@@ -9,6 +9,7 @@
 #include <imgui.h>
 
 #include <algorithm>
+#include <array>
 #include <functional>
 #include <string>
 #include <vector>
@@ -17,6 +18,10 @@
 #include "tt_ui.h"
 
 namespace tabletennis {
+
+// Rockstar Table Tennis achievements that require Xbox Live (online / ranked).
+inline constexpr std::array<uint32_t, 10> kOnlineAchievements = {24, 25, 26, 27, 28,
+                                                                  29, 31, 32, 33, 34};
 
 class AchievementsMenu : public rex::ui::ImGuiDialog {
  public:
@@ -31,14 +36,15 @@ class AchievementsMenu : public rex::ui::ImGuiDialog {
  protected:
   void OnDraw(ImGuiIO& io) override {
     const MenuText& t = CurrentText();
-    // Secret achievements (no "show unachieved" flag, 0x8) stay hidden until
-    // unlocked, unless revealed with X.
+    // Achievements that can no longer be earned (they need the defunct Xbox
+    // Live service) are hidden unless unlocked or revealed with X.
     const auto all = achievements_->ListAchievements();
     std::vector<rex::system::AchievementInfo> list;
     int hidden = 0;
     for (const auto& a : all) {
-      const bool secret = (a.flags & 0x8) == 0;
-      if (secret && !achievements_->IsUnlocked(a.id) && !show_secrets_) {
+      const bool online = std::find(kOnlineAchievements.begin(), kOnlineAchievements.end(),
+                                    a.id) != kOnlineAchievements.end();
+      if (online && !achievements_->IsUnlocked(a.id) && !show_secrets_) {
         ++hidden;
         continue;
       }
@@ -138,7 +144,7 @@ class AchievementsMenu : public rex::ui::ImGuiDialog {
                   desc.empty() ? t.locked_hint : desc.c_str(), nullptr, rb.x - 24.0f - tx);
     }
 
-    // X shows / hides the secret achievements.
+    // X shows / hides the online-only achievements.
     if (hidden || show_secrets_) {
       ui::DrawFooter(dl, L, {{"X", show_secrets_ ? t.hide_secrets : t.show_secrets}, {"B", t.back}});
     } else {

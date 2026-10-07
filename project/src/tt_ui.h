@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cctype>
 #include <cstdint>
 #include <filesystem>
 #include <string>
@@ -47,7 +48,7 @@ inline Fonts& GetFonts() {
 }
 
 // Called from ReXApp::OnConfigureFonts. Titles use a Pricedown-style font
-// (fonts\pricedown.ttf next to the exe, if present), menus Century Gothic,
+// (any "pricedown" .ttf/.otf in the fonts folder next to the exe), menus Century Gothic,
 // with fallbacks shipped with Windows.
 inline void LoadFonts(ImFontAtlas* atlas) {
   static const ImWchar ranges[] = {0x0020, 0x017F, 0};  // Latin, Latin-1, Latin Ext-A
@@ -70,7 +71,22 @@ inline void LoadFonts(ImFontAtlas* atlas) {
     return nullptr;
   };
   Fonts& f = GetFonts();
-  f.title = load({exe_fonts / "pricedown.ttf", win_fonts / "impact.ttf"},
+  // Any user-supplied Pricedown file (e.g. "Pricedown Bl.otf") in the fonts folder.
+  std::filesystem::path pricedown = exe_fonts / "pricedown.ttf";
+  std::error_code ec;
+  if (std::filesystem::is_directory(exe_fonts, ec)) {
+    for (const auto& entry : std::filesystem::directory_iterator(exe_fonts, ec)) {
+      std::string name = entry.path().filename().string();
+      std::string ext = entry.path().extension().string();
+      for (auto& c : name) c = char(std::tolower(static_cast<unsigned char>(c)));
+      for (auto& c : ext) c = char(std::tolower(static_cast<unsigned char>(c)));
+      if (name.find("pricedown") != std::string::npos && (ext == ".ttf" || ext == ".otf")) {
+        pricedown = entry.path();
+        break;
+      }
+    }
+  }
+  f.title = load({pricedown, win_fonts / "impact.ttf"},
                  50.0f);
   f.item = load({win_fonts / "GOTHICB.TTF", win_fonts / "arialbd.ttf"},
                 27.0f);

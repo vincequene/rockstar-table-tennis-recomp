@@ -17,7 +17,8 @@ built by static recompilation with the [ReXGlue SDK](https://github.com/rexglue/
 - Any language shipped on the disc: English, French, German, Spanish, Italian
 - Rendering up to 4K (the original game runs at 720p), 16x texture filtering
 - Fullscreen / windowed (**Alt+Enter**)
-- Achievements (29) with an in-game list (**F7** or **View + RB**) and pop-ups
+- Achievements (29) with an in-game list (**F7** or **View + RB**) and pop-ups; the 10 online-only
+  achievements (no longer obtainable) are hidden, **X** shows them
 - **Discord** Rich Presence driven by the original Xbox Live presence
   ("Offline Exhib 2-1 — Kumi vs Jesper")
 - Working local network mode (System Link)
@@ -25,7 +26,25 @@ built by static recompilation with the [ReXGlue SDK](https://github.com/rexglue/
 - Saves in `Documents\Rockstar Table Tennis`
 - The game's own icon, extracted from your copy during the build
 
-## Install
+## Install with Claude (easiest)
+
+If you use [Claude Code](https://claude.com/claude-code) (desktop app or terminal), it can do
+everything for you, including installing the tools and fixing problems along the way.
+
+1. Download this repository (**Code → Download ZIP**) and extract it, e.g. to `C:\TableTennis`.
+2. Open that folder in Claude Code.
+3. Paste this prompt (replace the ISO path with yours):
+
+```text
+I want to build the PC version of Rockstar Table Tennis from this repository.
+My legal Xbox 360 ISO is at: C:\Games\Rockstar Table Tennis.iso — never modify it.
+Read README.md, then run Build.bat (scripts/build.ps1) with my ISO. Install any missing
+build tools (ask me before each download), fix any build error, and tell me in simple
+words what is happening at each step. When it is done, launch
+dist\Rockstar Table Tennis\Rockstar Table Tennis.exe and tell me what to test.
+```
+
+## Install manually
 
 Requirements: 64-bit Windows 10/11, about 25 GB free, and your Rockstar Table Tennis ISO.
 
@@ -53,15 +72,17 @@ Press **F1** in game, or edit `tabletennis.toml` next to the executable:
 
 - **Icon**: extracted automatically from your game. To use another one, put a
   `tabletennis.ico` at the root of this folder before building.
-- **Title font**: menus use Century Gothic (shipped with Windows/Office). The game's titles use a
-  Pricedown-style font; Pricedown is a commercial font, so it is not included. If you own a TrueType
-  copy, put it in `fonts\pricedown.ttf` before building (otherwise Impact is used).
+- **Title font**: menus use Century Gothic (shipped with Windows/Office). The game's titles use
+  Pricedown, which is not included. Download "Pricedown Bl" yourself (e.g. from DaFont, check its
+  license) and put the `.otf`/`.ttf` file in a `fonts` folder at the root of this repository
+  before building, or in `dist\Rockstar Table Tennisonts`. Otherwise Impact is used.
 
 ## Known limitations
 
 - The game stays at 60 FPS: above that, its game logic (RAGE engine) breaks.
 - The original Xbox Live service no longer exists: the Xbox Live menu entry shows the game's
-  "you must be signed in" message.
+  "you must be signed in" message. The game has no System Link: for remote multiplayer, use
+  local two-controller play over Parsec.
 
 ## How it works
 
@@ -95,6 +116,11 @@ BSD 3-Clause (© Tom Clay, with parts from the Xenia project); the SDK patch fol
 
 Portage PC non officiel de Rockstar Table Tennis (Xbox 360) par recompilation statique avec
 ReXGlue. **Aucun fichier du jeu n'est inclus.**
+
+**Le plus simple avec Claude Code :** ouvre le dossier du dépôt dans Claude Code et colle le
+prompt de la section « Install with Claude » (en remplaçant le chemin de ton ISO).
+
+**À la main :**
 
 1. Télécharge ce dépôt (**Code → Download ZIP**) et décompresse-le.
 2. Double-clique sur **`Build.bat`** et choisis ton ISO (ta propre copie légale).

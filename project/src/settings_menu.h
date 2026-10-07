@@ -63,31 +63,31 @@ inline const MenuText& TextFor(uint32_t language) {
       "Yes", "No", "Apply and restart", "Restart the game", "Language and resolution apply after a restart.",
       "Accept", "Back", "Change",
       "F1 settings - F7 achievements - Alt+Enter window - Esc twice quit",
-      "Achievements", "unlocked", "Locked", "secret", "Show secrets", "Hide secrets"};
+      "Achievements", "unlocked", "Locked", "online", "Show online achievements", "Hide online achievements"};
   static const MenuText fr = {
       "Réglages", "Langue", "Résolution", "Plein écran", "Textures", "D'origine", "Statut Discord",
       "Oui", "Non", "Appliquer et redémarrer", "Relancer le jeu",
       "La langue et la résolution s'appliquent après un redémarrage.", "Accepter", "Retour",
       "Modifier", "F1 réglages - F7 succès - Alt+Entrée fenêtre - Échap x2 quitter",
-      "Succès", "débloqués", "Verrouillé", "secrets", "Voir les secrets", "Masquer les secrets"};
+      "Succès", "débloqués", "Verrouillé", "en ligne", "Afficher les succès en ligne", "Masquer les succès en ligne"};
   static const MenuText de = {
       "Einstellungen", "Sprache", "Auflösung", "Vollbild", "Texturen", "Original", "Discord-Status",
       "Ja", "Nein", "Übernehmen und neu starten", "Spiel neu starten",
       "Sprache und Auflösung gelten nach einem Neustart.", "Annehmen", "Zurück", "Ändern",
       "F1 Einstellungen - F7 Erfolge - Alt+Enter Fenster - 2x Esc Beenden",
-      "Erfolge", "freigeschaltet", "Gesperrt", "geheim", "Geheime zeigen", "Geheime verbergen"};
+      "Erfolge", "freigeschaltet", "Gesperrt", "online", "Online-Erfolge zeigen", "Online-Erfolge verbergen"};
   static const MenuText es = {
       "Ajustes", "Idioma", "Resolución", "Pantalla completa", "Texturas", "Original",
       "Estado de Discord", "Sí", "No", "Aplicar y reiniciar", "Reiniciar el juego",
       "El idioma y la resolución se aplican tras reiniciar.", "Aceptar", "Atrás", "Cambiar",
       "F1 ajustes - F7 logros - Alt+Intro ventana - Esc x2 salir",
-      "Logros", "desbloqueados", "Bloqueado", "secretos", "Ver secretos", "Ocultar secretos"};
+      "Logros", "desbloqueados", "Bloqueado", "en línea", "Mostrar logros en línea", "Ocultar logros en línea"};
   static const MenuText it = {
       "Impostazioni", "Lingua", "Risoluzione", "Schermo intero", "Texture", "Originale",
       "Stato Discord", "Sì", "No", "Applica e riavvia", "Riavvia il gioco",
       "Lingua e risoluzione si applicano dopo un riavvio.", "Accetta", "Indietro", "Cambia",
       "F1 impostazioni - F7 obiettivi - Alt+Invio finestra - Esc x2 esci",
-      "Obiettivi", "sbloccati", "Bloccato", "segreti", "Mostra segreti", "Nascondi segreti"};
+      "Obiettivi", "sbloccati", "Bloccato", "online", "Mostra obiettivi online", "Nascondi obiettivi online"};
   switch (language) {
     case 4: return fr;
     case 3: return de;
