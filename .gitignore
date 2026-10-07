@@ -1,0 +1,12 @@
+# Never commit game data, generated code or builds
+build/
+dist/
+*.iso
+*.xex
+*.xexp
+project/assets/
+project/generated/default/
+project/out/
+project/res/*.ico
+project/res/*.png
+*.log

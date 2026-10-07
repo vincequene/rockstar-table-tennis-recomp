@@ -1,0 +1,481 @@
+diff --git a/include/rex/ppc/context.h b/include/rex/ppc/context.h
+index 0ede542..e1b19af 100644
+--- a/include/rex/ppc/context.h
++++ b/include/rex/ppc/context.h
+@@ -158,7 +158,13 @@ struct FPSCRRegister {
+   static constexpr uint32_t GuestMask = uint32_t(RoundMaskVal) | uint32_t(FlushMask);
+ 
+   inline uint32_t getcsr() noexcept { return Platform::getcsr(); }
+-  inline void setcsr(uint32_t csr) noexcept { Platform::setcsr(csr); }
++  // Always keep host FP exceptions masked: a context whose csr was never seeded
++  // by InitHost (e.g. guest code run from a host callback thread) would
++  // otherwise unmask every exception (STATUS_FLOAT_INEXACT_RESULT crashes).
++  inline void setcsr(uint32_t csr) noexcept {
++    Platform::InitHostExceptions(csr);
++    Platform::setcsr(csr);
++  }
+ 
+   // Restoring the whole word would unmask every FP exception when csr is 0.
+   inline void restoreGuestBits(uint32_t saved) noexcept {
+diff --git a/include/rex/system/presence.h b/include/rex/system/presence.h
+new file mode 100644
+index 0000000..a6b6235
+--- /dev/null
++++ b/include/rex/system/presence.h
+@@ -0,0 +1,25 @@
++/**
++ * @file        rex/system/presence.h
++ * @brief       Hook point for title rich presence (XUserSetContext/Property).
++ *
++ * The XGI app forwards every context/property the title sets so a host app can
++ * mirror the original Xbox Live presence (e.g. to Discord Rich Presence).
++ */
++#pragma once
++
++#include <cstdint>
++#include <functional>
++
++namespace rex::system::presence {
++
++enum class Kind { kContext, kProperty };
++
++using Listener = std::function<void(uint32_t user_index, Kind kind, uint32_t id, int64_t value)>;
++
++// Replaces the current listener (pass nullptr to clear). Thread-safe.
++void SetListener(Listener listener);
++
++// Called by the kernel when the title updates a context or property.
++void Notify(uint32_t user_index, Kind kind, uint32_t id, int64_t value);
++
++}  // namespace rex::system::presence
+diff --git a/src/codegen/phase_gapfill.cpp b/src/codegen/phase_gapfill.cpp
+index f3da777..f00cbe0 100644
+--- a/src/codegen/phase_gapfill.cpp
++++ b/src/codegen/phase_gapfill.cpp
+@@ -56,6 +56,28 @@ std::vector<CodeRegion> splitRegionOnTerminators(
+     if (decoded.is_return()) {
+       shouldSplit = true;
+       reason = "blr";
++    } else if (raw == 0x4E800420 && addr >= segmentStart + 4 &&
++               (addr + 4 - segmentStart) <= 20) {
++      // Short virtual-call thunk (e.g. lwz/lwz/mtctr/bctr). Only split when the
++      // segment is tiny, contains mtctr right before bctr and no conditional
++      // branches, so real switch tables are not cut apart.
++      const uint8_t* prevData = binary.translate(addr - 4);
++      uint32_t prevRaw = prevData ? load_and_swap<uint32_t>(prevData) : 0;
++      bool isMtctr = (prevRaw & 0xFC1FFFFF) == 0x7C0903A6;
++      bool hasCond = false;
++      for (uint32_t a = segmentStart; a < addr; a += 4) {
++        const uint8_t* d = binary.translate(a);
++        uint32_t r = d ? load_and_swap<uint32_t>(d) : 0;
++        uint32_t op = r >> 26;
++        if (op == 16 || op == 18 || op == 19) {
++          hasCond = true;
++          break;
++        }
++      }
++      if (isMtctr && !hasCond) {
++        shouldSplit = true;
++        reason = "bctr thunk";
++      }
+     } else if (decoded.opcode == Opcode::b && decoded.branch_target.has_value()) {
+       uint32_t target = decoded.branch_target.value();
+       // Don't split on tail recursion (branch to own segment start)
+@@ -165,7 +187,7 @@ void gapFillCodeRegions(CodegenContext& ctx) {
+   }
+ 
+   if (segmentsCreated > 0) {
+-    REXCODEGEN_TRACE("Analyze: registered {} gap functions from {} regions", segmentsCreated,
++    REXCODEGEN_INFO("Analyze: registered {} gap functions from {} regions", segmentsCreated,
+                      gapsFound);
+   } else {
+     REXCODEGEN_TRACE("Analyze: no uncovered regions found");
+diff --git a/src/kernel/xam/apps/xgi_app.cpp b/src/kernel/xam/apps/xgi_app.cpp
+index 2b222da..26a2e96 100644
+--- a/src/kernel/xam/apps/xgi_app.cpp
++++ b/src/kernel/xam/apps/xgi_app.cpp
+@@ -9,6 +9,7 @@
+  * @modified    Tom Clay, 2026 - Adapted for ReXGlue runtime
+  */
+ 
++#include <rex/system/presence.h>
+ #include <rex/kernel/xam/apps/xgi_app.h>
+ #include <rex/logging.h>
+ #include <rex/thread.h>
+@@ -42,6 +43,7 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
+       uint32_t context_value = memory::load_and_swap<uint32_t>(buffer + 20);
+       REXKRNL_DEBUG("XGIUserSetContextEx({:08X}, {:08X}, {:08X})", user_index, context_id,
+                     context_value);
++      presence::Notify(user_index, presence::Kind::kContext, context_id, context_value);
+       return X_E_SUCCESS;
+     }
+     case 0x000B0007: {
+@@ -51,6 +53,13 @@ X_HRESULT XgiApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
+       uint32_t value_ptr = memory::load_and_swap<uint32_t>(buffer + 24);
+       REXKRNL_DEBUG("XGIUserSetPropertyEx({:08X}, {:08X}, {}, {:08X})", user_index, property_id,
+                     value_size, value_ptr);
++      if (value_ptr && (value_size == 4 || value_size == 8)) {
++        auto value_host = memory_->TranslateVirtual(value_ptr);
++        int64_t value = value_size == 8
++                            ? static_cast<int64_t>(memory::load_and_swap<uint64_t>(value_host))
++                            : static_cast<int32_t>(memory::load_and_swap<uint32_t>(value_host));
++        presence::Notify(user_index, presence::Kind::kProperty, property_id, value);
++      }
+       return X_E_SUCCESS;
+     }
+     case 0x000B0008: {
+diff --git a/src/kernel/xam/xam_info.cpp b/src/kernel/xam/xam_info.cpp
+index 1fda053..34b03f1 100644
+--- a/src/kernel/xam/xam_info.cpp
++++ b/src/kernel/xam/xam_info.cpp
+@@ -11,7 +11,9 @@
+ 
+ #include <rex/kernel/xam/module.h>
+ #include <rex/kernel/xam/private.h>
++#include <rex/cvar.h>
+ #include <rex/logging.h>
++#include <rex/system/flags.h>
+ #include <rex/hook.h>
+ #include <rex/types.h>
+ #include <rex/string.h>
+@@ -183,19 +185,14 @@ u32 XGetGameRegion_entry() {
+ }
+ 
+ u32 XGetLanguage_entry() {
+-  auto desired_language = XLanguage::kEnglish;
+-
+-  // Switch the language based on game region.
+-  // TODO(benvanik): pull from xex header.
+-  uint32_t game_region = XEX_REGION_NTSCU;
+-  if (game_region & XEX_REGION_NTSCU) {
+-    desired_language = XLanguage::kEnglish;
+-  } else if (game_region & XEX_REGION_NTSCJ) {
+-    desired_language = XLanguage::kJapanese;
++  // Use the configured console language (user_language cvar), like the
++  // dashboard setting on real hardware. Titles fall back to English themselves
++  // when they do not ship the requested language.
++  uint32_t language = REXCVAR_GET(user_language);
++  if (language == 0 || language >= uint32_t(XLanguage::kMaxLanguages)) {
++    language = uint32_t(XLanguage::kEnglish);
+   }
+-  // Add more overrides?
+-
+-  return uint32_t(desired_language);
++  return language;
+ }
+ 
+ u32 XamGetCurrentTitleId_entry() {
+diff --git a/src/kernel/xam/xam_net.cpp b/src/kernel/xam/xam_net.cpp
+index 58e36a4..8034293 100644
+--- a/src/kernel/xam/xam_net.cpp
++++ b/src/kernel/xam/xam_net.cpp
+@@ -182,6 +182,21 @@ struct XNetStartupParams {
+ 
+ XNetStartupParams xnet_startup_params = {};
+ 
++
++// Real Xbox 360 sockets are small positive integers; titles commonly test
++// "socket >= 0" with a signed compare. Kernel object handles (0xF8xxxxxx) are
++// negative as int32, so expose a small positive alias to the guest instead.
++constexpr uint32_t kGuestSocketBias = 0x100;
++inline uint32_t HostToGuestSocket(uint32_t handle) {
++  return handle - XObject::kHandleBase + kGuestSocketBias;
++}
++inline uint32_t GuestToHostSocket(uint32_t guest) {
++  if (guest >= kGuestSocketBias && guest < 0x01000000) {
++    return guest - kGuestSocketBias + XObject::kHandleBase;
++  }
++  return guest;
++}
++
+ u32 NetDll_XNetStartup_entry(u32 caller, ppc_ptr_t<XNetStartupParams> params) {
+   if (params) {
+     assert_true(params->cfgSizeOfStruct == sizeof(XNetStartupParams));
+@@ -199,6 +214,7 @@ u32 NetDll_XNetStartup_entry(u32 caller, ppc_ptr_t<XNetStartupParams> params) {
+   }
+   */
+ 
++  REXKRNL_INFO("[net] XNetStartup called");
+   return 0;
+ }
+ 
+@@ -323,7 +339,7 @@ u32 NetDll_WSASendTo_entry(u32 caller, u32 socket_handle, ppc_ptr_t<XWSABUF> buf
+   assert(!overlapped);
+   assert(!completion_routine);
+ 
+-  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(socket_handle);
++  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(GuestToHostSocket(socket_handle));
+   if (!socket) {
+     // WSAENOTSOCK
+     XThread::SetLastError(0x2736);
+@@ -584,6 +600,8 @@ u32 NetDll_socket_entry(u32 caller, u32 af, u32 type, u32 protocol) {
+       socket->Initialize(XSocket::AddressFamily((uint32_t)af), XSocket::Type((uint32_t)type),
+                          XSocket::Protocol((uint32_t)protocol));
+ 
++  REXKRNL_INFO("[net] socket(af={}, type={}, proto={}) -> status {:08X}", af, type, protocol,
++               result);
+   if (XFAILED(result)) {
+     socket->Release();
+ 
+@@ -592,11 +610,11 @@ u32 NetDll_socket_entry(u32 caller, u32 af, u32 type, u32 protocol) {
+     return -1;
+   }
+ 
+-  return socket->handle();
++  return HostToGuestSocket(socket->handle());
+ }
+ 
+ u32 NetDll_closesocket_entry(u32 caller, u32 socket_handle) {
+-  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(socket_handle);
++  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(GuestToHostSocket(socket_handle));
+   if (!socket) {
+     // WSAENOTSOCK
+     XThread::SetLastError(0x2736);
+@@ -611,7 +629,7 @@ u32 NetDll_closesocket_entry(u32 caller, u32 socket_handle) {
+ }
+ 
+ i32 NetDll_shutdown_entry(u32 caller, u32 socket_handle, i32 how) {
+-  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(socket_handle);
++  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(GuestToHostSocket(socket_handle));
+   if (!socket) {
+     // WSAENOTSOCK
+     XThread::SetLastError(0x2736);
+@@ -632,7 +650,7 @@ i32 NetDll_shutdown_entry(u32 caller, u32 socket_handle, i32 how) {
+ 
+ u32 NetDll_setsockopt_entry(u32 caller, u32 socket_handle, u32 level, u32 optname,
+                             mapped_void optval_ptr, u32 optlen) {
+-  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(socket_handle);
++  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(GuestToHostSocket(socket_handle));
+   if (!socket) {
+     // WSAENOTSOCK
+     XThread::SetLastError(0x2736);
+@@ -640,11 +658,13 @@ u32 NetDll_setsockopt_entry(u32 caller, u32 socket_handle, u32 level, u32 optnam
+   }
+ 
+   X_STATUS status = socket->SetOption(level, optname, optval_ptr, optlen);
++  REXKRNL_INFO("[net] setsockopt(h={:X}, level={:X}, opt={:X}, len={}) -> status {:08X}",
++               socket_handle, level, optname, optlen, status);
+   return XSUCCEEDED(status) ? 0 : -1;
+ }
+ 
+ u32 NetDll_ioctlsocket_entry(u32 caller, u32 socket_handle, u32 cmd, mapped_void arg_ptr) {
+-  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(socket_handle);
++  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(GuestToHostSocket(socket_handle));
+   if (!socket) {
+     // WSAENOTSOCK
+     XThread::SetLastError(0x2736);
+@@ -652,6 +672,8 @@ u32 NetDll_ioctlsocket_entry(u32 caller, u32 socket_handle, u32 cmd, mapped_void
+   }
+ 
+   X_STATUS status = socket->IOControl(cmd, arg_ptr);
++  REXKRNL_INFO("[net] ioctlsocket(h={:X}, cmd={:X}) -> status {:08X}", socket_handle, cmd,
++               status);
+   if (XFAILED(status)) {
+     XThread::SetLastError(xboxkrnl::xeRtlNtStatusToDosError(status));
+     return -1;
+@@ -662,7 +684,7 @@ u32 NetDll_ioctlsocket_entry(u32 caller, u32 socket_handle, u32 cmd, mapped_void
+ }
+ 
+ u32 NetDll_bind_entry(u32 caller, u32 socket_handle, ppc_ptr_t<XSOCKADDR_IN> name, u32 namelen) {
+-  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(socket_handle);
++  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(GuestToHostSocket(socket_handle));
+   if (!socket) {
+     // WSAENOTSOCK
+     XThread::SetLastError(0x2736);
+@@ -671,6 +693,8 @@ u32 NetDll_bind_entry(u32 caller, u32 socket_handle, ppc_ptr_t<XSOCKADDR_IN> nam
+ 
+   N_XSOCKADDR_IN native_name(name);
+   X_STATUS status = socket->Bind(&native_name, namelen);
++  REXKRNL_INFO("[net] bind(h={:X}, namelen={}) -> status {:08X}", socket_handle, namelen,
++               status);
+   if (XFAILED(status)) {
+     XThread::SetLastError(xboxkrnl::xeRtlNtStatusToDosError(status));
+     return -1;
+@@ -680,7 +704,7 @@ u32 NetDll_bind_entry(u32 caller, u32 socket_handle, ppc_ptr_t<XSOCKADDR_IN> nam
+ }
+ 
+ u32 NetDll_connect_entry(u32 caller, u32 socket_handle, ppc_ptr_t<XSOCKADDR> name, u32 namelen) {
+-  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(socket_handle);
++  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(GuestToHostSocket(socket_handle));
+   if (!socket) {
+     // WSAENOTSOCK
+     XThread::SetLastError(0x2736);
+@@ -698,7 +722,7 @@ u32 NetDll_connect_entry(u32 caller, u32 socket_handle, ppc_ptr_t<XSOCKADDR> nam
+ }
+ 
+ u32 NetDll_listen_entry(u32 caller, u32 socket_handle, i32 backlog) {
+-  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(socket_handle);
++  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(GuestToHostSocket(socket_handle));
+   if (!socket) {
+     // WSAENOTSOCK
+     XThread::SetLastError(0x2736);
+@@ -722,7 +746,7 @@ u32 NetDll_accept_entry(u32 caller, u32 socket_handle, ppc_ptr_t<XSOCKADDR> addr
+     return -1;
+   }
+ 
+-  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(socket_handle);
++  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(GuestToHostSocket(socket_handle));
+   if (!socket) {
+     // WSAENOTSOCK
+     XThread::SetLastError(0x2736);
+@@ -737,7 +761,7 @@ u32 NetDll_accept_entry(u32 caller, u32 socket_handle, ppc_ptr_t<XSOCKADDR> addr
+     std::memcpy(addr_ptr->sa_data, native_addr.sa_data, *addrlen_ptr - 2);
+     *addrlen_ptr = native_len;
+ 
+-    return new_socket->handle();
++    return HostToGuestSocket(new_socket->handle());
+   } else {
+     return -1;
+   }
+@@ -762,7 +786,7 @@ struct host_set {
+         break;
+       }
+       // Convert from Xenia -> native
+-      auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(socket_handle);
++      auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(GuestToHostSocket(socket_handle));
+       assert_not_null(socket);
+       this->sockets[i] = socket;
+     }
+@@ -772,7 +796,7 @@ struct host_set {
+     guest_set->fd_count = 0;
+     for (uint32_t i = 0; i < this->count; ++i) {
+       auto socket = this->sockets[i];
+-      guest_set->fd_array[guest_set->fd_count++] = socket->handle();
++      guest_set->fd_array[guest_set->fd_count++] = HostToGuestSocket(socket->handle());
+     }
+   }
+ 
+@@ -845,7 +869,7 @@ i32 NetDll_select_entry(i32 caller, i32 nfds, ppc_ptr_t<x_fd_set> readfds,
+ }
+ 
+ u32 NetDll_recv_entry(u32 caller, u32 socket_handle, mapped_void buf_ptr, u32 buf_len, u32 flags) {
+-  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(socket_handle);
++  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(GuestToHostSocket(socket_handle));
+   if (!socket) {
+     // WSAENOTSOCK
+     XThread::SetLastError(0x2736);
+@@ -857,7 +881,7 @@ u32 NetDll_recv_entry(u32 caller, u32 socket_handle, mapped_void buf_ptr, u32 bu
+ 
+ u32 NetDll_recvfrom_entry(u32 caller, u32 socket_handle, mapped_void buf_ptr, u32 buf_len,
+                           u32 flags, ppc_ptr_t<XSOCKADDR_IN> from_ptr, mapped_u32 fromlen_ptr) {
+-  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(socket_handle);
++  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(GuestToHostSocket(socket_handle));
+   if (!socket) {
+     // WSAENOTSOCK
+     XThread::SetLastError(0x2736);
+@@ -896,7 +920,7 @@ u32 NetDll_recvfrom_entry(u32 caller, u32 socket_handle, mapped_void buf_ptr, u3
+ }
+ 
+ u32 NetDll_send_entry(u32 caller, u32 socket_handle, mapped_void buf_ptr, u32 buf_len, u32 flags) {
+-  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(socket_handle);
++  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(GuestToHostSocket(socket_handle));
+   if (!socket) {
+     // WSAENOTSOCK
+     XThread::SetLastError(0x2736);
+@@ -908,7 +932,7 @@ u32 NetDll_send_entry(u32 caller, u32 socket_handle, mapped_void buf_ptr, u32 bu
+ 
+ u32 NetDll_sendto_entry(u32 caller, u32 socket_handle, mapped_void buf_ptr, u32 buf_len, u32 flags,
+                         ppc_ptr_t<XSOCKADDR_IN> to_ptr, u32 to_len) {
+-  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(socket_handle);
++  auto socket = REX_KERNEL_OBJECTS()->LookupObject<XSocket>(GuestToHostSocket(socket_handle));
+   if (!socket) {
+     // WSAENOTSOCK
+     XThread::SetLastError(0x2736);
+diff --git a/src/system/CMakeLists.txt b/src/system/CMakeLists.txt
+index fc46d86..bc94194 100644
+--- a/src/system/CMakeLists.txt
++++ b/src/system/CMakeLists.txt
+@@ -3,6 +3,7 @@ set(REXSYSTEM_SOURCES
+     embedded_metadata.cpp
+     achievement_manager.cpp
+     achievements.cpp
++    presence.cpp
+     kernel_state.cpp
+     xmemory.cpp
+     kernel_module.cpp
+diff --git a/src/system/mmio_handler.cpp b/src/system/mmio_handler.cpp
+index 2b93005..9f9eecc 100644
+--- a/src/system/mmio_handler.cpp
++++ b/src/system/mmio_handler.cpp
+@@ -9,6 +9,10 @@
+  * @modified    Tom Clay, 2026 - Adapted for ReXGlue runtime
+  */
+ 
++#if defined(_WIN32)
++#define WIN32_LEAN_AND_MEAN
++#include <windows.h>
++#endif
+ #include <algorithm>
+ #include <cstring>
+ #include <utility>
+@@ -417,8 +421,23 @@ bool MMIOHandler::ExceptionCallback(arch::Exception* ex) {
+     // The address is not found within any range, so either a write watch or an
+     // actual access violation.
+     if (access_violation_callback_) {
+-      return access_violation_callback_(std::move(lock), access_violation_callback_context_,
+-                                        fault_host_address, is_write);
++      bool handled = access_violation_callback_(std::move(lock), access_violation_callback_context_,
++                                                fault_host_address, is_write);
++#if defined(_WIN32)
++      if (!handled) {
++        // Diagnostic: report which host module/offset faulted.
++        HMODULE mod = nullptr;
++        char mod_name[MAX_PATH] = {0};
++        if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
++                                   GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
++                               reinterpret_cast<LPCSTR>(ex->pc()), &mod)) {
++          GetModuleFileNameA(mod, mod_name, MAX_PATH);
++        }
++        REXSYS_ERROR("Faulting host pc 0x{:016X} = {}+0x{:X}", ex->pc(), mod_name,
++                     ex->pc() - reinterpret_cast<uint64_t>(mod));
++      }
++#endif
++      return handled;
+     }
+     return false;
+   }
+diff --git a/src/system/presence.cpp b/src/system/presence.cpp
+new file mode 100644
+index 0000000..5cc403c
+--- /dev/null
++++ b/src/system/presence.cpp
+@@ -0,0 +1,39 @@
++/**
++ * @file        system/presence.cpp
++ * @brief       Rich presence listener registry.
++ */
++#include <rex/system/presence.h>
++
++#include <mutex>
++#include <utility>
++
++namespace rex::system::presence {
++
++namespace {
++std::mutex& ListenerMutex() {
++  static std::mutex m;
++  return m;
++}
++Listener& ListenerStorage() {
++  static Listener l;
++  return l;
++}
++}  // namespace
++
++void SetListener(Listener listener) {
++  std::lock_guard lock(ListenerMutex());
++  ListenerStorage() = std::move(listener);
++}
++
++void Notify(uint32_t user_index, Kind kind, uint32_t id, int64_t value) {
++  Listener copy;
++  {
++    std::lock_guard lock(ListenerMutex());
++    copy = ListenerStorage();
++  }
++  if (copy) {
++    copy(user_index, kind, id, value);
++  }
++}
++
++}  // namespace rex::system::presence
