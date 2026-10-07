@@ -422,6 +422,44 @@ index 5a572ce..741e35a 100644
  REX_EXPORT_STUB(__imp__XamShowAchievementsUIEx);
  REX_EXPORT_STUB(__imp__XamShowAndWaitForMessageBoxEx);
  REX_EXPORT_STUB(__imp__XamShowAvatarAwardGamesUI);
+diff --git a/src/kernel/xam/xam_user.cpp b/src/kernel/xam/xam_user.cpp
+index 8778066..01ba06e 100644
+--- a/src/kernel/xam/xam_user.cpp
++++ b/src/kernel/xam/xam_user.cpp
+@@ -14,6 +14,8 @@
+ 
+ #include <cstring>
+ 
++#include <thread>
++#include <chrono>
+ #include <rex/cvar.h>
+ #include <rex/kernel/xam/private.h>
+ #include <rex/logging.h>
+@@ -478,13 +480,17 @@ u32 XamUserAreUsersFriends_entry(u32 user_index, u32 unk1, u32 unk2, mapped_u32
+ u32 XamShowSigninUI_entry(u32 unk, u32 unk_mask) {
+   // Mask values vary. Probably matching user types? Local/remote?
+ 
+-  // To fix game modes that display a 4 profile signin UI (even if playing
+-  // alone):
+-  // XN_SYS_SIGNINCHANGED
+-  REX_KERNEL_STATE()->BroadcastNotification(0x0000000A, 1);
+-  // Games seem to sit and loop until we trigger this notification:
+-  // XN_SYS_UI (off)
+-  REX_KERNEL_STATE()->BroadcastNotification(0x00000009, 0);
++  // Behave like the user opening then cancelling the dashboard sign-in UI:
++  // XN_SYS_UI (on) now, then XN_SYS_SIGNINCHANGED and XN_SYS_UI (off) a bit
++  // later. Titles that wait for the on->off transition (e.g. before showing a
++  // "not signed in to Xbox Live" message) would otherwise hang with no menu.
++  auto* kernel_state = REX_KERNEL_STATE();
++  kernel_state->BroadcastNotification(0x00000009, 1);
++  std::thread([kernel_state]() {
++    std::this_thread::sleep_for(std::chrono::milliseconds(250));
++    kernel_state->BroadcastNotification(0x0000000A, 1);
++    kernel_state->BroadcastNotification(0x00000009, 0);
++  }).detach();
+   return X_ERROR_SUCCESS;
+ }
+ 
 diff --git a/src/system/CMakeLists.txt b/src/system/CMakeLists.txt
 index fc46d86..bc94194 100644
 --- a/src/system/CMakeLists.txt

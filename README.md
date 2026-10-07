@@ -60,7 +60,8 @@ Press **F1** in game, or edit `tabletennis.toml` next to the executable:
 ## Known limitations
 
 - The game stays at 60 FPS: above that, its game logic (RAGE engine) breaks.
-- The original Xbox Live service no longer exists.
+- The original Xbox Live service no longer exists: the Xbox Live menu entry shows the game's
+  "you must be signed in" message.
 
 ## How it works
 
@@ -72,6 +73,8 @@ Press **F1** in game, or edit `tabletennis.toml` next to the executable:
   - small positive socket handles like the console (System Link crashed after the intro);
   - `XGetLanguage` honours the configured language;
   - the game's own achievements screen request opens the PC achievements screen;
+  - the Xbox Live sign-in screen behaves like "opened then cancelled", so the game shows its
+    "sign in to Xbox Live" message instead of hanging;
   - a presence hook (used for Discord);
   - faulting address in the log.
 - `scripts/build.ps1`: full build from the ISO.
